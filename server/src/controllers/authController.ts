@@ -5,7 +5,12 @@ import {
 } from "express";
 
 import { loginUser } from "../services/authService";
+import { User } from "../models/User";
+import { AuthenticatedRequest } from "../types/auth";
 
+/**
+ * POST /api/auth/login
+ */
 export const login = async (
   req: Request,
   res: Response,
@@ -59,6 +64,49 @@ export const login = async (
       });
     }
 
+    next(error);
+  }
+};
+
+/**
+ * GET /api/auth/me
+ */
+export const getCurrentUser = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required",
+        error: "UNAUTHORIZED",
+      });
+    }
+
+    const user = await User.findById(
+      req.user.userId
+    );
+
+    if (!user || !user.isActive) {
+      return res.status(401).json({
+        success: false,
+        message: "User account is not available",
+        error: "UNAUTHORIZED",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        id: user._id,
+        email: user.email,
+        role: user.role,
+        isActive: user.isActive,
+      },
+    });
+  } catch (error) {
     next(error);
   }
 };

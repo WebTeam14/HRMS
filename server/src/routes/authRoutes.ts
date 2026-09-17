@@ -1,8 +1,20 @@
 import { Router } from "express";
-import { login } from "../controllers/authController";
+
+import {
+  login,
+  getCurrentUser,
+} from "../controllers/authController";
+
+import { authenticate } from "../middleware/authenticate";
 
 const router = Router();
 
 router.post("/login", login);
+
+router.get(
+  "/me",
+  authenticate,
+  getCurrentUser
+);
 
 export default router;
