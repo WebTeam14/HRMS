@@ -22,7 +22,10 @@ import {
   Layers,
   Wallet,
   LifeBuoy,
+  ClipboardList,
+  AlertTriangle,
 } from "lucide-react";
+import { getTaskAlerts, type TaskAlerts } from "../services/taskService";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import {
@@ -88,6 +91,7 @@ const Dashboard = () => {
   const [nextHoliday, setNextHoliday] = useState<Holiday | null>(null);
 
   const [todayWorkUpdate, setTodayWorkUpdate] = useState<WorkUpdate | null>(null);
+  const [taskAlerts, setTaskAlerts] = useState<TaskAlerts | null>(null);
   const [loadingDashboard, setLoadingDashboard] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
 
@@ -95,6 +99,16 @@ const Dashboard = () => {
     try {
       setLoadingDashboard(true);
       const todayStr = new Date().toISOString().split("T")[0];
+
+      // Fetch task alerts for current user
+      try {
+        const alertsRes = await getTaskAlerts();
+        if (alertsRes.data?.data) {
+          setTaskAlerts(alertsRes.data.data);
+        }
+      } catch (e) {
+        console.error("Failed to load task alerts:", e);
+      }
 
       // 1. Management aggregations
       if (isManagement) {
@@ -257,6 +271,80 @@ const Dashboard = () => {
           {headerInfo.tag}
         </div>
       </div>
+
+      {/* MNC-Style Task Alert Strip */}
+      {taskAlerts && (taskAlerts.myOverdue > 0 || taskAlerts.teamOverdue > 0 || taskAlerts.myPending > 0) && (
+        <div
+          style={{
+            marginBottom: "20px",
+            padding: "14px 20px",
+            borderRadius: "12px",
+            background: (taskAlerts.myOverdue > 0 || taskAlerts.teamOverdue > 0)
+              ? "linear-gradient(135deg, #fef2f2 0%, #fff1f2 100%)"
+              : "linear-gradient(135deg, #eff6ff 0%, #f0f9ff 100%)",
+            border: `1px solid ${(taskAlerts.myOverdue > 0 || taskAlerts.teamOverdue > 0) ? "#fecaca" : "#bfdbfe"}`,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "12px",
+            flexWrap: "wrap",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <div
+              style={{
+                padding: "8px",
+                borderRadius: "10px",
+                background: (taskAlerts.myOverdue > 0 || taskAlerts.teamOverdue > 0) ? "#fee2e2" : "#dbeafe",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              {(taskAlerts.myOverdue > 0 || taskAlerts.teamOverdue > 0) ? (
+                <AlertTriangle size={20} color="#dc2626" />
+              ) : (
+                <ClipboardList size={20} color="#2563eb" />
+              )}
+            </div>
+            <div>
+              <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>
+                {isManagement && taskAlerts.teamOverdue > 0 ? (
+                  <span style={{ color: "#dc2626" }}>
+                    🚨 Team Alert: {taskAlerts.teamOverdue} Task(s) Overdue!
+                  </span>
+                ) : taskAlerts.myOverdue > 0 ? (
+                  <span style={{ color: "#dc2626" }}>
+                    ⚠️ Overdue Alert: You have {taskAlerts.myOverdue} overdue task(s) requiring immediate action.
+                  </span>
+                ) : (
+                  <span>
+                    📋 Task Update: You have {taskAlerts.myPending} active task(s) assigned.
+                  </span>
+                )}
+              </div>
+              <div style={{ fontSize: "12px", color: "#64748b", marginTop: "2px" }}>
+                {isManagement
+                  ? `${taskAlerts.teamPending} total pending team tasks · ${taskAlerts.teamOverdue} overdue`
+                  : `${taskAlerts.myDueToday ? `${taskAlerts.myDueToday} due today · ` : ""}${taskAlerts.myPending} incomplete`}
+              </div>
+            </div>
+          </div>
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={() => navigate(isManagement ? "/tasks/management" : "/my-tasks")}
+            style={{
+              fontWeight: 600,
+              background: "#ffffff",
+              border: "1px solid #cbd5e1",
+              boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+            }}
+          >
+            {isManagement ? "Open Task Board" : "View My Tasks"} &rarr;
+          </button>
+        </div>
+      )}
 
       {/* 1. ACCOUNTS & FINANCE DASHBOARD STATS */}
       {isAccounts && (

@@ -50,6 +50,8 @@ import CompanyDirectory from "../pages/directory/CompanyDirectory";
 import MyPayslips from "../pages/payroll/MyPayslips";
 import PayrollManagement from "../pages/payroll/PayrollManagement";
 import MyHelpdesk from "../pages/helpdesk/MyHelpdesk";
+import TaskManagement from "../pages/tasks/TaskManagement";
+import MyTasks from "../pages/tasks/MyTasks";
 
 const AppRoutes = () => {
   return (
@@ -246,10 +248,11 @@ const AppRoutes = () => {
             element={<PayrollManagement />}
           />
 
-          <Route
-            path="/helpdesk"
-            element={<MyHelpdesk />}
-          />
+          <Route path="/helpdesk" element={<MyHelpdesk />} />
+
+          {/* Task Routes */}
+          <Route path="/tasks/management" element={<TaskManagement />} />
+          <Route path="/my-tasks" element={<MyTasks />} />
         </Route>
       </Route>
 

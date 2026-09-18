@@ -18,6 +18,7 @@ import payrollRoutes from "./routes/payrollRoutes";
 import helpdeskRoutes from "./routes/helpdeskRoutes";
 import testRoutes from "./routes/testRoutes";
 import employeeRoutes from "./routes/employeeRoutes";
+import taskRoutes from "./routes/taskRoutes";
 import { errorHandler } from "./middleware/errorHandler";
 
 const app = express();
@@ -80,6 +81,8 @@ app.use("/api/helpdesk", helpdeskRoutes);
 app.use("/api/test", testRoutes);
 
 app.use("/api/employees", employeeRoutes);
+
+app.use("/api/tasks", taskRoutes);
 
 // ========================================
 // 404 & ERROR HANDLING

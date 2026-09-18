@@ -12,6 +12,7 @@ import {
   PartyPopper,
   CreditCard,
   LifeBuoy,
+  ClipboardList,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -93,6 +94,11 @@ const Sidebar = () => {
             path: "/helpdesk",
             icon: LifeBuoy,
           },
+          {
+            label: "Task Board",
+            path: "/tasks/management",
+            icon: ClipboardList,
+          },
         ]
       : [
           {
@@ -129,6 +135,11 @@ const Sidebar = () => {
             label: "Helpdesk",
             path: "/helpdesk",
             icon: LifeBuoy,
+          },
+          {
+            label: "My Tasks",
+            path: "/my-tasks",
+            icon: ClipboardList,
           },
         ]),
   ];

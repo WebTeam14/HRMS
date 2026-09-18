@@ -178,6 +178,7 @@ export const getMyWorkUpdates = async (
 
   const taskMap: Record<string, { total: number; completed: number }> = {};
   tasks.forEach((t) => {
+    if (!t.workUpdateId) return;
     const uId = t.workUpdateId.toString();
     if (!taskMap[uId]) {
       taskMap[uId] = { total: 0, completed: 0 };
@@ -437,6 +438,7 @@ export const getAllWorkUpdates = async (query: {
 
   const taskMap: Record<string, { total: number; completed: number }> = {};
   tasks.forEach((t) => {
+    if (!t.workUpdateId) return;
     const uId = t.workUpdateId.toString();
     if (!taskMap[uId]) {
       taskMap[uId] = { total: 0, completed: 0 };

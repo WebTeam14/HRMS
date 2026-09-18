@@ -4,6 +4,7 @@ import { Employee } from "../models/Employee";
 import {
   getNormalizedDate,
   determineCheckInStatus,
+  determineCheckOutStatus,
 } from "../config/attendanceConfig";
 
 export interface AttendanceQuery {
@@ -105,8 +106,20 @@ export const checkOut = async (employeeId: string) => {
   const diffMs = now.getTime() - attendance.checkIn.getTime();
   const workingMinutes = Math.max(0, Math.round(diffMs / 60000));
 
+  const checkOutResult = determineCheckOutStatus(
+    attendance.checkIn,
+    now,
+    attendance.status as "PRESENT" | "LATE" | "HALF_DAY"
+  );
+
   attendance.checkOut = now;
   attendance.totalWorkingMinutes = workingMinutes;
+  attendance.status = checkOutResult.status;
+  if (checkOutResult.note) {
+    attendance.notes = attendance.notes
+      ? `${attendance.notes} | ${checkOutResult.note}`
+      : checkOutResult.note;
+  }
 
   await attendance.save();
 
