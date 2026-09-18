@@ -27,6 +27,7 @@ export interface IEmployee extends Document {
     | "INTERN";
 
   workLocation?: string;
+  monthlySalary?: number;
 
   status:
     | "ACTIVE"
@@ -114,6 +115,11 @@ const employeeSchema = new Schema<IEmployee>(
     workLocation: {
       type: String,
       trim: true,
+    },
+
+    monthlySalary: {
+      type: Number,
+      default: 50000,
     },
 
     status: {
