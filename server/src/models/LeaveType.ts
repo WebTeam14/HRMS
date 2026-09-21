@@ -54,8 +54,6 @@ const leaveTypeSchema = new Schema<ILeaveType>(
   }
 );
 
-leaveTypeSchema.index({ name: 1 }, { unique: true });
-leaveTypeSchema.index({ code: 1 }, { unique: true });
 leaveTypeSchema.index({ isActive: 1 });
 
 export const LeaveType = mongoose.model<ILeaveType>("LeaveType", leaveTypeSchema);

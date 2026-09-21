@@ -29,9 +29,24 @@ const app = express();
 
 app.use(helmet());
 
+const allowedOrigins = env.CLIENT_URL
+  ? env.CLIENT_URL.split(",").map((url) => url.trim().replace(/\/+$/, ""))
+  : ["http://localhost:5173"];
+
 app.use(
   cors({
-    origin: env.CLIENT_URL,
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      const cleanOrigin = origin.replace(/\/+$/, "");
+      if (
+        allowedOrigins.includes("*") ||
+        allowedOrigins.includes(cleanOrigin) ||
+        /\.vercel\.app$/.test(cleanOrigin)
+      ) {
+        return callback(null, true);
+      }
+      return callback(null, true);
+    },
     credentials: true,
   })
 );
@@ -43,6 +58,14 @@ app.use(express.json());
 // ========================================
 // HEALTH CHECK
 // ========================================
+
+app.get("/", (_req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "Technoriya HRMS API Server is running",
+    healthCheck: "/api/health",
+  });
+});
 
 app.get("/api/health", (_req, res) => {
   res.status(200).json({
