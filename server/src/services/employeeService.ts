@@ -512,3 +512,23 @@ export const getCompanyDirectory = async (query: {
     .populate("userId", "email role")
     .sort({ firstName: 1 });
 };
+
+export const deleteEmployee = async (employeeId: string) => {
+  if (!mongoose.Types.ObjectId.isValid(employeeId)) {
+    throw new Error("INVALID_EMPLOYEE_ID");
+  }
+
+  const employee = await Employee.findById(employeeId);
+
+  if (!employee) {
+    throw new Error("EMPLOYEE_NOT_FOUND");
+  }
+
+  if (employee.userId) {
+    await User.findByIdAndDelete(employee.userId);
+  }
+
+  await Employee.findByIdAndDelete(employeeId);
+
+  return { success: true };
+};

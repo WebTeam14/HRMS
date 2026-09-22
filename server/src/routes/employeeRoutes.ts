@@ -7,6 +7,7 @@ import {
   getEmployee,
   editEmployee,
   changeEmployeeStatus,
+  deleteEmployeeController,
   getCompanyDirectory,
 } from "../controllers/employeeController";
 
@@ -77,6 +78,15 @@ router.patch(
   ),
   validate(updateEmployeeStatusSchema),
   changeEmployeeStatus
+);
+
+router.delete(
+  "/:id",
+  authenticate,
+  requirePermission(
+    PERMISSIONS.EMPLOYEE_DELETE
+  ),
+  deleteEmployeeController
 );
 
 export default router;

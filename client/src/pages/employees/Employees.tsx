@@ -3,6 +3,7 @@ import {
   Plus,
   Eye,
   Pencil,
+  Trash2,
   MoreHorizontal,
   Users,
 } from "lucide-react";
@@ -16,16 +17,43 @@ import {
   useNavigate,
 } from "react-router-dom";
 
+import { useAuth } from "../../context/AuthContext";
 import {
   type Employee,
   getEmployees,
+  deleteEmployee,
 } from "../../services/employeeService";
 import { EditEmployeeModal } from "../../components/employees/EditEmployeeModal";
 
 const Employees = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+
+  const canDelete =
+    user?.role === "CEO" ||
+    user?.role === "ADMIN" ||
+    user?.role === "HR";
 
   const [selectedEditId, setSelectedEditId] = useState<string | null>(null);
+
+  const handleDeleteEmployee = async (employee: Employee) => {
+    const fullName = `${employee.firstName} ${employee.lastName || ""}`.trim();
+    const confirmed = window.confirm(
+      `Are you sure you want to delete employee "${fullName}" (${employee.employeeCode})?\n\nThis will permanently remove their employee record and user account.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      await deleteEmployee(employee._id);
+      await loadEmployees();
+    } catch (error: any) {
+      alert(
+        error?.response?.data?.message ||
+          "Failed to delete employee."
+      );
+    }
+  };
 
   const [
     employees,
@@ -431,6 +459,18 @@ const Employees = () => {
                               size={16}
                             />
                           </button>
+
+                          {canDelete && (
+                            <button
+                              type="button"
+                              title="Delete employee"
+                              className="danger-icon-btn"
+                              style={{ color: "#ef4444" }}
+                              onClick={() => handleDeleteEmployee(employee)}
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          )}
 
                           <button
                             type="button"

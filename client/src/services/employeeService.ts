@@ -146,3 +146,8 @@ export const updateEmployeeStatus =
 
     return response.data;
   };
+
+export const deleteEmployee = async (id: string) => {
+  const response = await api.delete(`/employees/${id}`);
+  return response.data;
+};

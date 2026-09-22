@@ -10,11 +10,14 @@ import {
   UserRound,
   ShieldCheck,
   Power,
+  Trash2,
 } from "lucide-react";
 
+import { useAuth } from "../../context/AuthContext";
 import {
   getEmployee,
   updateEmployeeStatus,
+  deleteEmployee,
   type Employee,
 } from "../../services/employeeService";
 import { EditEmployeeModal } from "../../components/employees/EditEmployeeModal";
@@ -22,6 +25,12 @@ import { EditEmployeeModal } from "../../components/employees/EditEmployeeModal"
 const EmployeeDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
+
+  const canDelete =
+    user?.role === "CEO" ||
+    user?.role === "ADMIN" ||
+    user?.role === "HR";
 
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -74,6 +83,27 @@ const EmployeeDetails = () => {
       alert(
         err?.response?.data?.message ||
           "Failed to update employee status."
+      );
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!employee || !id) return;
+
+    const fullName = `${employee.firstName} ${employee.lastName || ""}`.trim();
+    const confirmed = window.confirm(
+      `Are you sure you want to delete employee "${fullName}" (${employee.employeeCode})?\n\nThis will permanently remove their employee record and user account.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      await deleteEmployee(id);
+      navigate("/employees");
+    } catch (err: any) {
+      alert(
+        err?.response?.data?.message ||
+          "Failed to delete employee."
       );
     }
   };
@@ -146,6 +176,17 @@ const EmployeeDetails = () => {
               ? "Activate"
               : "Deactivate"}
           </button>
+
+          {canDelete && (
+            <button
+              className="danger-action"
+              style={{ backgroundColor: "#dc2626", color: "#ffffff" }}
+              onClick={handleDelete}
+            >
+              <Trash2 size={17} />
+              Delete Employee
+            </button>
+          )}
         </div>
       </div>
 

@@ -11,6 +11,7 @@ import {
   getEmployeeById,
   updateEmployee,
   updateEmployeeStatus,
+  deleteEmployee as deleteEmployeeService,
   getCompanyDirectory as getCompanyDirectoryService,
 } from "../services/employeeService";
 
@@ -231,6 +232,23 @@ export const getCompanyDirectory = async (
     return res.status(200).json({
       success: true,
       data: directory,
+    });
+  } catch (error) {
+    handleEmployeeError(error, res, next);
+  }
+};
+
+export const deleteEmployeeController = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    await deleteEmployeeService(String(req.params.id));
+
+    return res.status(200).json({
+      success: true,
+      message: "Employee deleted successfully",
     });
   } catch (error) {
     handleEmployeeError(error, res, next);
