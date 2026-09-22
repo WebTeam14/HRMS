@@ -4,6 +4,7 @@ import helmet from "helmet";
 
 import { env } from "./config/env";
 import { connectDatabase } from "./config/database";
+import { seedDatabase } from "./utils/seed";
 
 import authRoutes from "./routes/authRoutes";
 import departmentRoutes from "./routes/departmentRoutes";
@@ -127,6 +128,7 @@ app.use(errorHandler);
 
 const startServer = async (): Promise<void> => {
   await connectDatabase();
+  await seedDatabase(false);
 
   app.listen(env.PORT, () => {
     console.log(

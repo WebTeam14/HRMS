@@ -17,11 +17,15 @@ import { seedSamplePayslipsIfEmpty } from "../services/payrollService";
 import { seedDefaultHolidaysIfEmpty } from "../services/holidayService";
 import { ROLES } from "./roles";
 
-const seed = async () => {
+export const seedDatabase = async (force: boolean = false) => {
   try {
-    await connectDatabase();
+    const existingUsers = await User.countDocuments();
+    if (!force && existingUsers > 0) {
+      console.log(`Database already contains ${existingUsers} users. Skipping auto-seed.`);
+      return;
+    }
 
-    console.log("Clearing existing database collections for clean seed...");
+    console.log("Seeding database with default accounts...");
 
     await HelpdeskTicket.deleteMany({});
     await WorkUpdate.deleteMany({});
@@ -388,11 +392,18 @@ const seed = async () => {
     console.log("5. Employee:          web.technoriya@gmail.com   (Password: Shubhasmita@TETPL)");
     console.log("==================================================");
 
-    process.exit(0);
+    if (require.main === module) {
+      process.exit(0);
+    }
   } catch (error) {
     console.error("Seed failed:", error);
-    process.exit(1);
+    if (require.main === module) {
+      process.exit(1);
+    }
+    throw error;
   }
 };
 
-seed();
+if (require.main === module) {
+  connectDatabase().then(() => seedDatabase(true));
+}
