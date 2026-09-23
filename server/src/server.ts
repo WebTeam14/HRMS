@@ -20,6 +20,8 @@ import helpdeskRoutes from "./routes/helpdeskRoutes";
 import testRoutes from "./routes/testRoutes";
 import employeeRoutes from "./routes/employeeRoutes";
 import taskRoutes from "./routes/taskRoutes";
+import onboardingRoutes from "./routes/onboardingRoutes";
+import relievingRoutes from "./routes/relievingRoutes";
 import { errorHandler } from "./middleware/errorHandler";
 
 const app = express();
@@ -107,6 +109,10 @@ app.use("/api/test", testRoutes);
 app.use("/api/employees", employeeRoutes);
 
 app.use("/api/tasks", taskRoutes);
+
+app.use("/api/onboarding", onboardingRoutes);
+
+app.use("/api/relieving", relievingRoutes);
 
 // ========================================
 // 404 & ERROR HANDLING

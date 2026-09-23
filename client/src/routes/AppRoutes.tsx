@@ -53,6 +53,11 @@ import MyHelpdesk from "../pages/helpdesk/MyHelpdesk";
 import TaskManagement from "../pages/tasks/TaskManagement";
 import MyTasks from "../pages/tasks/MyTasks";
 
+import OnboardingList from "../pages/onboarding/OnboardingList";
+import OnboardingDetails from "../pages/onboarding/OnboardingDetails";
+import RelievingList from "../pages/relieving/RelievingList";
+import RelievingDetails from "../pages/relieving/RelievingDetails";
+
 const AppRoutes = () => {
   return (
     <Routes>
@@ -253,6 +258,14 @@ const AppRoutes = () => {
           {/* Task Routes */}
           <Route path="/tasks/management" element={<TaskManagement />} />
           <Route path="/my-tasks" element={<MyTasks />} />
+
+          {/* Onboarding Routes */}
+          <Route path="/onboarding" element={<OnboardingList />} />
+          <Route path="/onboarding/:employeeId" element={<OnboardingDetails />} />
+
+          {/* Relieving / Exit Routes */}
+          <Route path="/relieving" element={<RelievingList />} />
+          <Route path="/relieving/:id" element={<RelievingDetails />} />
         </Route>
       </Route>
 

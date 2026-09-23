@@ -66,6 +66,19 @@ export const PERMISSIONS = {
 
   // Settings
   SETTINGS_MANAGE: "settings.manage",
+
+  // Onboarding
+  ONBOARDING_VIEW: "onboarding.view",
+  ONBOARDING_INITIATE: "onboarding.initiate",
+  ONBOARDING_UPDATE_TASK: "onboarding.update_task",
+  ONBOARDING_VERIFY_DOC: "onboarding.verify_doc",
+
+  // Relieving / Exit Management
+  RELIEVING_VIEW: "relieving.view",
+  RELIEVING_INITIATE: "relieving.initiate",
+  RELIEVING_APPROVE: "relieving.approve",
+  RELIEVING_CLEARANCE: "relieving.clearance",
+  RELIEVING_SETTLE: "relieving.settle",
 } as const;
 
 export type Permission =

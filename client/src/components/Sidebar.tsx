@@ -13,6 +13,8 @@ import {
   CreditCard,
   LifeBuoy,
   ClipboardList,
+  UserPlus,
+  UserMinus,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -49,6 +51,24 @@ const Sidebar = () => {
             path: "/employees",
             icon: Users,
           },
+          ...(isHrOrAdmin
+            ? [
+                {
+                  label: "Onboarding",
+                  path: "/onboarding",
+                  icon: UserPlus,
+                },
+              ]
+            : []),
+          ...(isHrOrAdmin || user?.role === "ACCOUNTS"
+            ? [
+                {
+                  label: "Relieving / Exit",
+                  path: "/relieving",
+                  icon: UserMinus,
+                },
+              ]
+            : []),
           {
             label: "Attendance",
             path: "/attendance",

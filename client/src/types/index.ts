@@ -442,3 +442,223 @@ export interface HelpdeskTicket {
   createdAt: string;
   updatedAt: string;
 }
+
+// ==========================================
+// ONBOARDING MODULE TYPES
+// ==========================================
+export type OnboardingStatus = "INVITED" | "DOCS_PENDING" | "VERIFIED" | "ACTIVE";
+export type OnboardingTaskStatus = "PENDING" | "COMPLETED";
+
+export interface OnboardingTask {
+  _id: string;
+  title: string;
+  assigneeRole: string;
+  departmentId?: {
+    _id: string;
+    name: string;
+    code: string;
+  };
+  status: OnboardingTaskStatus;
+  dueDate?: string;
+  completedAt?: string;
+  completedBy?: {
+    _id: string;
+    email: string;
+  };
+}
+
+export interface OnboardingChecklist {
+  _id: string;
+  employeeId: {
+    _id: string;
+    firstName: string;
+    lastName?: string;
+    employeeCode: string;
+    designation?: string;
+    phone?: string;
+    workLocation?: string;
+    joiningDate: string;
+    status: string;
+    departmentId?: {
+      _id: string;
+      name: string;
+      code: string;
+    };
+    userId?: {
+      _id: string;
+      email: string;
+      role: Role;
+      isActive: boolean;
+    };
+  };
+  status: OnboardingStatus;
+  tasks: OnboardingTask[];
+  notes?: string;
+  activatedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type DocumentType =
+  | "ID_PROOF"
+  | "EDUCATION"
+  | "BANK"
+  | "OFFER_LETTER"
+  | "EXPERIENCE"
+  | "OTHER";
+
+export type DocumentVerificationStatus = "PENDING" | "VERIFIED" | "REJECTED";
+
+export interface OnboardingDocument {
+  _id: string;
+  employeeId: string;
+  onboardingId?: string;
+  title: string;
+  type: DocumentType;
+  fileUrl: string;
+  fileName?: string;
+  fileSize?: number;
+  verificationStatus: DocumentVerificationStatus;
+  rejectionReason?: string;
+  verifiedBy?: {
+    _id: string;
+    email: string;
+  };
+  verifiedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ==========================================
+// RELIEVING / EXIT MODULE TYPES
+// ==========================================
+export type RelievingStatus =
+  | "INITIATED"
+  | "APPROVED"
+  | "CLEARANCE_PENDING"
+  | "SETTLED"
+  | "RELIEVED";
+
+export interface RelievingRequest {
+  _id: string;
+  employeeId: {
+    _id: string;
+    firstName: string;
+    lastName?: string;
+    employeeCode: string;
+    designation?: string;
+    phone?: string;
+    workLocation?: string;
+    joiningDate: string;
+    monthlySalary?: number;
+    status: string;
+    departmentId?: {
+      _id: string;
+      name: string;
+      code: string;
+    };
+    userId?: {
+      _id: string;
+      email: string;
+      role: Role;
+      isActive: boolean;
+    };
+  };
+  resignationDate: string;
+  lastWorkingDay: string;
+  reason: string;
+  handoverNotes?: string;
+  personalEmail?: string;
+  contactPhone?: string;
+  status: RelievingStatus;
+  approvedBy?: {
+    _id: string;
+    email: string;
+  };
+  approvedAt?: string;
+  approvalRemarks?: string;
+  relievedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ClearanceItemStatus = "PENDING" | "CLEARED" | "FLAGGED";
+
+export interface ClearanceItem {
+  _id: string;
+  departmentId?: {
+    _id: string;
+    name: string;
+    code: string;
+  };
+  departmentCode: string;
+  item: string;
+  status: ClearanceItemStatus;
+  remarks?: string;
+  clearedBy?: {
+    _id: string;
+    email: string;
+  };
+  clearedAt?: string;
+}
+
+export interface ClearanceChecklist {
+  _id: string;
+  relievingId: string;
+  employeeId: string;
+  items: ClearanceItem[];
+  allCleared: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FnFEarnings {
+  basic: number;
+  hra: number;
+  leaveEncashment: number;
+  bonus: number;
+  gratuity: number;
+  otherEarnings: number;
+  totalEarnings: number;
+}
+
+export interface FnFDeductions {
+  noticePayDeduction: number;
+  assetDamage: number;
+  pfDeduction: number;
+  taxDeduction: number;
+  otherDeductions: number;
+  totalDeductions: number;
+}
+
+export interface FnFSettlement {
+  _id: string;
+  relievingId: string;
+  employeeId: string;
+  earnings: FnFEarnings;
+  deductions: FnFDeductions;
+  netPayable: number;
+  remarks?: string;
+  settledBy?: {
+    _id: string;
+    email: string;
+  };
+  settledAt?: string;
+  status: "DRAFT" | "SETTLED";
+  pdfUrl?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RelievingLetterData {
+  referenceNumber: string;
+  issueDate: string;
+  employeeName: string;
+  employeeCode: string;
+  designation: string;
+  department: string;
+  joiningDate: string;
+  relievingDate: string;
+  companyName: string;
+  authorizedSignatory: string;
+}
