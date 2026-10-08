@@ -6,8 +6,14 @@ import {
   CreditCard,
   ShieldCheck,
   Building,
+  Eye,
+  Paperclip,
+  MessageSquare,
+  CheckCircle2,
+  HelpCircle,
+  Send,
 } from "lucide-react";
-import { getMyPayslips, formatCurrency } from "../../services/payrollService";
+import { getMyPayslips, raiseSalarySlipQuery, formatCurrency } from "../../services/payrollService";
 import type { SalarySlip, SalarySummary } from "../../types";
 
 const numberToWordsINR = (num: number): string => {
@@ -88,6 +94,19 @@ const MyPayslips = () => {
 
   const [selectedSlip, setSelectedSlip] = useState<SalarySlip | null>(null);
 
+  // Proof Preview Modal State
+  const [proofPreviewModal, setProofPreviewModal] = useState<{ url: string; name: string } | null>(null);
+
+  // Raise Query / View Queries Modal State
+  const [querySlip, setQuerySlip] = useState<SalarySlip | null>(null);
+  const [queryForm, setQueryForm] = useState({
+    queryType: "Base Salary Mismatch",
+    subject: "",
+    description: "",
+  });
+  const [submittingQuery, setSubmittingQuery] = useState(false);
+  const [querySuccess, setQuerySuccess] = useState<string | null>(null);
+
   const loadPayslips = async () => {
     try {
       setLoading(true);
@@ -99,6 +118,31 @@ const MyPayslips = () => {
       setError(err?.response?.data?.message || "Failed to load salary slips");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRaiseQuery = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!querySlip || !queryForm.subject.trim() || !queryForm.description.trim()) return;
+
+    try {
+      setSubmittingQuery(true);
+      setError(null);
+      setQuerySuccess(null);
+      const res = await raiseSalarySlipQuery(querySlip._id, {
+        queryType: queryForm.queryType,
+        subject: queryForm.subject.trim(),
+        description: queryForm.description.trim(),
+      });
+
+      setQuerySlip(res.data);
+      setQueryForm({ queryType: "Base Salary Mismatch", subject: "", description: "" });
+      setQuerySuccess("Your query/request has been submitted to HR. HR will review and take needful action.");
+      await loadPayslips();
+    } catch (err: any) {
+      setError(err?.response?.data?.message || "Failed to submit query to HR");
+    } finally {
+      setSubmittingQuery(false);
     }
   };
 
@@ -240,15 +284,15 @@ const MyPayslips = () => {
                   <th>Present / Paid Days</th>
                   <th>Late Marks</th>
                   <th>Gross Salary</th>
-                  <th>Deductions (PF+Tax)</th>
+                  <th>Deductions</th>
                   <th>Net Take-Home</th>
-                  <th>Status</th>
-                  <th>Disbursed Date</th>
+                  <th>Status & Payment</th>
+                  <th>Queries & Issues</th>
                   <th style={{ textAlign: "right" }}>Action</th>
                 </tr>
               </thead>
               <tbody>
-                {slips.map((slip) => (
+                {slips.map((slip: SalarySlip) => (
                   <tr key={slip._id}>
                     <td>
                       <strong style={{ color: "#0f172a", fontSize: "14px" }}>
@@ -285,26 +329,114 @@ const MyPayslips = () => {
                       </strong>
                     </td>
                     <td>
-                      <span
-                        className={`status-badge ${
-                          slip.status === "PAID"
-                            ? "status-active"
-                            : slip.status === "PROCESSED"
-                            ? "status-notice"
-                            : "status-leave"
-                        }`}
-                      >
-                        {slip.status}
-                      </span>
+                      <div>
+                        <span
+                          className={`status-badge ${
+                            slip.status === "PAID"
+                              ? "status-active"
+                              : slip.status === "PROCESSED"
+                              ? "status-notice"
+                              : "status-leave"
+                          }`}
+                        >
+                          {slip.status}
+                        </span>
+                        {slip.status === "PAID" && (
+                          <div style={{ marginTop: "4px", fontSize: "11px", color: "#64748b" }}>
+                            <span style={{ display: "block", color: "#0f172a", fontWeight: 600 }}>
+                              {slip.paidVia || "Bank Transfer"}
+                            </span>
+                            {slip.paidProofUrl ? (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setProofPreviewModal({
+                                    url: slip.paidProofUrl!,
+                                    name: slip.paidProofName || "Disbursement Proof",
+                                  })
+                                }
+                                style={{
+                                  padding: "2px 6px",
+                                  marginTop: "2px",
+                                  fontSize: "10px",
+                                  fontWeight: 700,
+                                  background: "#dcfce7",
+                                  color: "#15803d",
+                                  border: "1px solid #86efac",
+                                  borderRadius: "4px",
+                                  cursor: "pointer",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "3px",
+                                }}
+                              >
+                                <Paperclip size={10} /> View Proof
+                              </button>
+                            ) : null}
+                          </div>
+                        )}
+                      </div>
                     </td>
-                    <td style={{ color: "#64748b", fontSize: "13px" }}>
-                      {slip.paymentDate
-                        ? new Date(slip.paymentDate).toLocaleDateString("en-US", {
-                            month: "short",
-                            day: "numeric",
-                            year: "numeric",
-                          })
-                        : "—"}
+                    <td>
+                      {slip.queries && slip.queries.length > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setQuerySlip(slip);
+                            setQuerySuccess(null);
+                          }}
+                          style={{
+                            padding: "3px 8px",
+                            fontSize: "11px",
+                            fontWeight: 600,
+                            borderRadius: "6px",
+                            background: slip.queries.some((q: any) => q.status === "OPEN")
+                              ? "#fef3c7"
+                              : slip.queries.some((q: any) => q.status === "RESOLVED")
+                              ? "#dcfce7"
+                              : "#e0f2fe",
+                            color: slip.queries.some((q: any) => q.status === "OPEN")
+                              ? "#b45309"
+                              : slip.queries.some((q: any) => q.status === "RESOLVED")
+                              ? "#15803d"
+                              : "#0369a1",
+                            border: "none",
+                            cursor: "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "4px",
+                          }}
+                        >
+                          <MessageSquare size={11} />
+                          {slip.queries.some((q: any) => q.status === "OPEN")
+                            ? "Pending HR"
+                            : slip.queries.some((q: any) => q.status === "RESOLVED")
+                            ? "HR Resolved"
+                            : "In Review"}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setQuerySlip(slip);
+                            setQuerySuccess(null);
+                          }}
+                          style={{
+                            padding: "3px 8px",
+                            fontSize: "11px",
+                            borderRadius: "6px",
+                            background: "#f8fafc",
+                            color: "#64748b",
+                            border: "1px solid #cbd5e1",
+                            cursor: "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "4px",
+                          }}
+                        >
+                          <HelpCircle size={11} /> Raise Query
+                        </button>
+                      )}
                     </td>
                     <td style={{ textAlign: "right" }}>
                       <button
@@ -633,6 +765,107 @@ const MyPayslips = () => {
                 </div>
               </div>
 
+              {/* Official Payment Disbursement Record & Proof */}
+              <div
+                style={{
+                  background: "#f8fafc",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "8px",
+                  padding: "14px 18px",
+                  marginBottom: "16px",
+                  fontSize: "12px",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                  <strong style={{ color: "#0f172a", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <CreditCard size={16} color="#2563eb" /> Disbursement Details & Proof of Payment
+                  </strong>
+                  <span
+                    className={`status-badge ${
+                      selectedSlip.status === "PAID"
+                        ? "status-active"
+                        : selectedSlip.status === "PROCESSED"
+                        ? "status-notice"
+                        : "status-leave"
+                    }`}
+                  >
+                    {selectedSlip.status}
+                  </span>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px", fontSize: "12px" }}>
+                  <div>
+                    <span style={{ color: "#64748b", display: "block" }}>Disbursed Via:</span>
+                    <strong style={{ color: "#0f172a" }}>{selectedSlip.paidVia || "Bank Transfer (NEFT/RTGS)"}</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: "#64748b", display: "block" }}>Disbursement Date:</span>
+                    <strong>{selectedSlip.paymentDate ? new Date(selectedSlip.paymentDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: "#64748b", display: "block" }}>Transaction / UTR Ref:</span>
+                    <strong>{selectedSlip.paymentReference || "—"}</strong>
+                  </div>
+                </div>
+
+                <div style={{ marginTop: "12px", paddingTop: "8px", borderTop: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
+                  {selectedSlip.paidProofUrl ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <span style={{ color: "#16a34a", fontWeight: 600, fontSize: "11px" }}>✓ Payment Proof Attached:</span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setProofPreviewModal({
+                            url: selectedSlip.paidProofUrl!,
+                            name: selectedSlip.paidProofName || "Disbursement Proof",
+                          })
+                        }
+                        style={{
+                          padding: "5px 12px",
+                          fontSize: "11px",
+                          fontWeight: 600,
+                          background: "#2563eb",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "6px",
+                          cursor: "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "4px",
+                        }}
+                      >
+                        <Eye size={12} /> View Payment Receipt
+                      </button>
+                    </div>
+                  ) : (
+                    <span style={{ color: "#94a3b8", fontSize: "11px" }}>No receipt document attached by HR.</span>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const slip = selectedSlip;
+                      setSelectedSlip(null);
+                      setQuerySlip(slip);
+                    }}
+                    style={{
+                      padding: "5px 12px",
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      background: "#fffbeb",
+                      color: "#b45309",
+                      border: "1px solid #fde68a",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                    }}
+                  >
+                    <HelpCircle size={12} /> Have a Query on this Payslip?
+                  </button>
+                </div>
+              </div>
+
               {/* Signatures & Seal Footer */}
               <div
                 style={{
@@ -656,6 +889,224 @@ const MyPayslips = () => {
                   <span style={{ display: "block", color: "#64748b", fontSize: "10px" }}>HR & Payroll Department</span>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Raise Query / Problem Request Modal for Employee */}
+      {querySlip && (
+        <div className="modal-overlay" style={{ zIndex: 1250 }}>
+          <div className="modal" style={{ maxWidth: "620px", padding: "26px" }}>
+            <div className="modal-header">
+              <div>
+                <h3 style={{ margin: 0, fontSize: "18px", display: "flex", alignItems: "center", gap: "8px" }}>
+                  <HelpCircle size={20} color="#2563eb" /> Raise Payroll Query or Problem
+                </h3>
+                <p style={{ margin: "3px 0 0", fontSize: "12px", color: "#64748b" }}>
+                  Payslip: {querySlip.month} {querySlip.year} • Net Take-Home: {formatCurrency(querySlip.netSalary)}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="close-button"
+                onClick={() => { setQuerySlip(null); setQuerySuccess(null); }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="modal-body" style={{ padding: "16px 0", maxHeight: "65vh", overflowY: "auto" }}>
+              {querySuccess && (
+                <div style={{ padding: "12px", background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#15803d", borderRadius: "8px", marginBottom: "14px", fontSize: "13px", display: "flex", alignItems: "center", gap: "8px" }}>
+                  <CheckCircle2 size={16} />
+                  <span>{querySuccess}</span>
+                </div>
+              )}
+
+              {/* Existing queries on this slip */}
+              {querySlip.queries && querySlip.queries.length > 0 && (
+                <div style={{ marginBottom: "20px" }}>
+                  <h4 style={{ margin: "0 0 10px", fontSize: "13px", color: "#475569", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                    Previous Queries on this Payslip:
+                  </h4>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                    {querySlip.queries.map((q: any) => (
+                      <div
+                        key={q._id}
+                        style={{
+                          border: q.status === "RESOLVED" ? "1px solid #86efac" : "1px solid #e2e8f0",
+                          borderRadius: "8px",
+                          padding: "12px 14px",
+                          background: q.status === "RESOLVED" ? "#f0fdf4" : "#f8fafc",
+                        }}
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                          <strong style={{ fontSize: "13px", color: "#0f172a" }}>
+                            [{q.queryType}] {q.subject}
+                          </strong>
+                          <span
+                            style={{
+                              fontSize: "11px",
+                              fontWeight: 700,
+                              padding: "2px 8px",
+                              borderRadius: "10px",
+                              background: q.status === "RESOLVED" ? "#dcfce7" : q.status === "OPEN" ? "#fef3c7" : "#e0f2fe",
+                              color: q.status === "RESOLVED" ? "#15803d" : q.status === "OPEN" ? "#b45309" : "#0369a1",
+                            }}
+                          >
+                            {q.status}
+                          </span>
+                        </div>
+                        <p style={{ margin: "0 0 6px", fontSize: "12px", color: "#334155" }}>
+                          {q.description}
+                        </p>
+                        <small style={{ color: "#64748b", display: "block" }}>
+                          Submitted: {new Date(q.raisedAt).toLocaleDateString()}
+                        </small>
+                        {q.hrRemarks && (
+                          <div style={{ marginTop: "8px", background: "white", borderLeft: "3px solid #2563eb", padding: "8px 10px", borderRadius: "0 6px 6px 0", fontSize: "12px" }}>
+                            <strong style={{ color: "#1e40af", display: "block" }}>HR Feedback / Action Taken:</strong>
+                            <span style={{ color: "#334155" }}>{q.hrRemarks}</span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Form to submit a new query */}
+              <form onSubmit={handleRaiseQuery}>
+                <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "16px" }}>
+                  <h4 style={{ margin: "0 0 12px", fontSize: "14px", color: "#0f172a", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <MessageSquare size={16} color="#2563eb" /> Submit a New Query / Problem to HR
+                  </h4>
+
+                  <div className="form-group" style={{ marginBottom: "12px" }}>
+                    <label style={{ fontSize: "12px", fontWeight: 600 }}>Query Category</label>
+                    <select
+                      value={queryForm.queryType}
+                      onChange={(e) => setQueryForm({ ...queryForm, queryType: e.target.value })}
+                      style={{ width: "100%", padding: "8px 12px", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "13px" }}
+                    >
+                      <option value="Base Salary Mismatch">Base Salary Discrepancy / Mismatch</option>
+                      <option value="Incentive Missing / Incorrect">Incentive / Bonus Missing or Incorrect</option>
+                      <option value="Tax / TDS Deduction Query">Tax / TDS Deduction Discrepancy</option>
+                      <option value="Other Deductions Query">Other Deductions / Advance Recovery Issue</option>
+                      <option value="Payment Proof / Transfer Issue">Payment Proof / Bank Credit Issue</option>
+                      <option value="General Payroll Query">General Payroll Query</option>
+                    </select>
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: "12px" }}>
+                    <label style={{ fontSize: "12px", fontWeight: 600 }}>Subject</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Q3 performance incentive not credited in September slip"
+                      value={queryForm.subject}
+                      onChange={(e) => setQueryForm({ ...queryForm, subject: e.target.value })}
+                      required
+                      style={{ width: "100%", padding: "8px 12px", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "13px" }}
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: "12px" }}>
+                    <label style={{ fontSize: "12px", fontWeight: 600 }}>Detailed Problem Description</label>
+                    <textarea
+                      rows={3}
+                      placeholder="Explain the specific issue with dates, expected amounts, or deductions so HR can verify and take needful action..."
+                      value={queryForm.description}
+                      onChange={(e) => setQueryForm({ ...queryForm, description: e.target.value })}
+                      required
+                      style={{ width: "100%", padding: "8px 12px", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "13px" }}
+                    />
+                  </div>
+
+                  <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                    <button
+                      type="submit"
+                      disabled={submittingQuery}
+                      className="primary-button"
+                      style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "13px", padding: "8px 16px" }}
+                    >
+                      <Send size={14} />
+                      {submittingQuery ? "Submitting..." : "Send Request to HR"}
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </div>
+
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => { setQuerySlip(null); setQuerySuccess(null); }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Proof Preview Modal for Employee */}
+      {proofPreviewModal && (
+        <div className="modal-overlay" style={{ zIndex: 1400 }}>
+          <div className="modal" style={{ maxWidth: "680px", padding: "20px" }}>
+            <div className="modal-header">
+              <h3 style={{ margin: 0, fontSize: "16px" }}>{proofPreviewModal.name}</h3>
+              <button
+                type="button"
+                className="close-button"
+                onClick={() => setProofPreviewModal(null)}
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="modal-body" style={{ textAlign: "center", padding: "16px 0", maxHeight: "70vh", overflowY: "auto" }}>
+              {proofPreviewModal.url.startsWith("data:image") || proofPreviewModal.url.match(/\.(jpeg|jpg|gif|png)$/i) ? (
+                <img
+                  src={proofPreviewModal.url}
+                  alt="Payment Proof"
+                  style={{ maxWidth: "100%", maxHeight: "65vh", objectFit: "contain", borderRadius: "8px", border: "1px solid #e2e8f0" }}
+                />
+              ) : (
+                <div style={{ padding: "40px 20px", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                  <FileText size={48} color="#2563eb" style={{ margin: "0 auto 12px" }} />
+                  <p style={{ fontWeight: 600, color: "#0f172a" }}>Official Payment Receipt Document Attached</p>
+                  <a
+                    href={proofPreviewModal.url}
+                    download={proofPreviewModal.name || "Payment_Proof.pdf"}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="primary-button"
+                    style={{ display: "inline-flex", alignItems: "center", gap: "6px", textDecoration: "none", marginTop: "10px" }}
+                  >
+                    Download / Open Proof Document
+                  </a>
+                </div>
+              )}
+            </div>
+            <div className="modal-footer" style={{ display: "flex", justifyContent: "space-between" }}>
+              <a
+                href={proofPreviewModal.url}
+                download={proofPreviewModal.name || "Payment_Proof"}
+                target="_blank"
+                rel="noreferrer"
+                className="secondary-button"
+                style={{ textDecoration: "none" }}
+              >
+                Download File
+              </a>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() => setProofPreviewModal(null)}
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>

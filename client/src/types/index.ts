@@ -397,6 +397,21 @@ export interface SalarySlip {
   uanNumber?: string;
   pfNumber?: string;
   notes?: string;
+  paidVia?: string;
+  paymentReference?: string;
+  paidProofUrl?: string;
+  paidProofName?: string;
+  queries?: Array<{
+    _id: string;
+    queryType: string;
+    subject: string;
+    description: string;
+    status: "OPEN" | "IN_REVIEW" | "RESOLVED" | "REJECTED";
+    raisedAt: string;
+    resolvedAt?: string;
+    hrRemarks?: string;
+    resolvedBy?: any;
+  }>;
 
   createdAt: string;
   updatedAt: string;

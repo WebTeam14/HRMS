@@ -53,12 +53,13 @@ export const seedSamplePayslipsIfEmpty = async (
       const basicSalary = Math.round(baseGross * 0.5);
       const hra = Math.round(baseGross * 0.25);
       const specialAllowance = baseGross - (basicSalary + hra);
-      const lopDeduction = Math.round((baseGross / totalDays) * lopDays);
-      const pfDeduction = Math.min(2160, Math.round(basicSalary * 0.12));
-      const taxDeduction = Math.round(baseGross * 0.05);
-      const professionalTax = 200;
-      const totalDeductions = lopDeduction + pfDeduction + taxDeduction + professionalTax;
-      const netSalary = baseGross - totalDeductions;
+      const lopDeduction = 0;
+      const pfDeduction = 0;
+      const taxDeduction = 0;
+      const professionalTax = 0;
+      const otherDeductions = 0;
+      const totalDeductions = 0;
+      const netSalary = baseGross;
 
       await SalarySlip.create({
         employeeId,
@@ -89,6 +90,10 @@ export const seedSamplePayslipsIfEmpty = async (
         panNumber: "ABCDE1234F",
         uanNumber: "100984729104",
         pfNumber: "MH/BAN/0049281/000/00392",
+        paidVia: "Direct Deposit (NEFT/RTGS)",
+        paymentReference: `UTR20260${mIndex}894210`,
+        paidProofUrl: "",
+        paidProofName: "",
         notes: `Monthly compensation for ${monthName} 2026 credited via Direct Deposit.`,
       });
     }
@@ -184,11 +189,12 @@ export const calculateMonthlyPayroll = async (
     const incentives = 0;
     const reimbursements = 0;
 
-    const lopDeduction = Math.round((baseGross / totalDaysInMonth) * lopDays);
-    const pfDeduction = 0; // Default ₹0 since company doesn't enforce mandatory PF
-    const taxDeduction = Math.round(baseGross * 0.05);
-    const professionalTax = 200;
-    const totalDeductions = lopDeduction + pfDeduction + taxDeduction + professionalTax;
+    const lopDeduction = 0; // Default ₹0 - no automatic LOP deduction unless manually adjusted
+    const pfDeduction = 0; // Default ₹0
+    const taxDeduction = 0; // Default ₹0 - no automatic tax withholding unless manually adjusted
+    const professionalTax = 0; // Default ₹0
+    const otherDeductions = 0; // Default ₹0
+    const totalDeductions = 0;
     const totalEarnings = baseGross + incentives + reimbursements;
     const netSalary = Math.max(0, totalEarnings - totalDeductions);
 
@@ -284,6 +290,35 @@ export const getCompanyPayrollSheet = async (
     return calculateMonthlyPayroll(monthIndex, year);
   }
 
+  // Auto-normalize any legacy records that had the old default ₹200 professional tax
+  let normalizedAny = false;
+  for (const s of slips) {
+    if (s.professionalTax === 200) {
+      s.professionalTax = 0;
+      s.totalDeductions =
+        (s.lopDeduction || 0) +
+        (s.pfDeduction || 0) +
+        (s.taxDeduction || 0) +
+        (s.otherDeductions || 0);
+      const totalEarn = s.grossSalary + (s.incentives || 0) + (s.reimbursements || 0);
+      s.netSalary = Math.max(0, totalEarn - s.totalDeductions);
+      await s.save();
+      normalizedAny = true;
+    }
+  }
+
+  if (normalizedAny) {
+    slips = await SalarySlip.find({ monthIndex, year })
+      .populate({
+        path: "employeeId",
+        populate: [
+          { path: "departmentId", select: "name code" },
+          { path: "managerId", select: "employeeCode firstName lastName" },
+        ],
+      })
+      .sort({ createdAt: -1 });
+  }
+
   const totalGross = slips.reduce((sum, s) => sum + s.grossSalary, 0);
   const totalNet = slips.reduce((sum, s) => sum + s.netSalary, 0);
   const totalDeductions = slips.reduce((sum, s) => sum + s.totalDeductions, 0);
@@ -315,42 +350,152 @@ export const publishMonthlyPayroll = async (
 
 export const updateSalarySlip = async (
   id: string,
-  updates: Partial<ISalarySlip>
+  updates: Partial<ISalarySlip> & {
+    basicSalary?: number;
+    baseSalary?: number;
+  }
 ): Promise<ISalarySlip> => {
   const slip = await SalarySlip.findById(id);
   if (!slip) {
     throw new Error("Salary slip not found");
   }
 
-  if (updates.grossSalary !== undefined && updates.grossSalary > 0) {
-    slip.grossSalary = updates.grossSalary;
-    slip.basicSalary = Math.round(slip.grossSalary * 0.5);
-    slip.hra = Math.round(slip.grossSalary * 0.25);
-    slip.specialAllowance = Math.max(0, slip.grossSalary - (slip.basicSalary + slip.hra));
-    // Recalculate LOP deduction if base gross changed
-    if (slip.totalDaysInMonth > 0 && slip.lopDays > 0) {
-      slip.lopDeduction = Math.round((slip.grossSalary / slip.totalDaysInMonth) * slip.lopDays);
-    }
+  // Allow manual entry of Base Salary / Gross Salary
+  const manualBase = updates.baseSalary !== undefined 
+    ? updates.baseSalary 
+    : (updates.grossSalary !== undefined ? updates.grossSalary : updates.basicSalary);
+
+  if (manualBase !== undefined && manualBase >= 0) {
+    slip.grossSalary = manualBase;
+    slip.basicSalary = Math.round(manualBase * 0.5);
+    slip.hra = Math.round(manualBase * 0.25);
+    slip.specialAllowance = Math.max(0, manualBase - (slip.basicSalary + slip.hra));
   }
 
+  // Earnings manual adjustments
   if (updates.incentives !== undefined) slip.incentives = Math.max(0, updates.incentives);
   if (updates.reimbursements !== undefined) slip.reimbursements = Math.max(0, updates.reimbursements);
-  if (updates.pfDeduction !== undefined) slip.pfDeduction = Math.max(0, updates.pfDeduction);
-  if (updates.taxDeduction !== undefined) slip.taxDeduction = Math.max(0, updates.taxDeduction);
   if (updates.specialAllowance !== undefined) slip.specialAllowance = updates.specialAllowance;
-  if (updates.otherDeductions !== undefined) slip.otherDeductions = updates.otherDeductions;
+  if (updates.hra !== undefined) slip.hra = updates.hra;
+
+  // Deductions manual adjustments (default 0)
+  if (updates.taxDeduction !== undefined) slip.taxDeduction = Math.max(0, updates.taxDeduction);
+  if (updates.otherDeductions !== undefined) slip.otherDeductions = Math.max(0, updates.otherDeductions);
+  if (updates.pfDeduction !== undefined) slip.pfDeduction = Math.max(0, updates.pfDeduction);
+  if (updates.professionalTax !== undefined) slip.professionalTax = Math.max(0, updates.professionalTax);
+  else slip.professionalTax = 0; // Default 0
+  if (updates.lopDeduction !== undefined) slip.lopDeduction = Math.max(0, updates.lopDeduction);
+  else slip.lopDeduction = 0; // Default 0
+
+  // Status & Payment metadata
   if (updates.notes !== undefined) slip.notes = updates.notes;
   if (updates.status !== undefined) slip.status = updates.status;
+  if (updates.paymentDate !== undefined) slip.paymentDate = updates.paymentDate;
+  if (updates.paidVia !== undefined) slip.paidVia = updates.paidVia;
+  if (updates.paymentReference !== undefined) slip.paymentReference = updates.paymentReference;
+  if (updates.paidProofUrl !== undefined) slip.paidProofUrl = updates.paidProofUrl;
+  if (updates.paidProofName !== undefined) slip.paidProofName = updates.paidProofName;
 
   // Recalculate totals
-  const totalEarnings = slip.grossSalary + (slip.incentives || 0) + (slip.reimbursements || 0);
+  const totalEarnings = (slip.grossSalary || 0) + (slip.incentives || 0) + (slip.reimbursements || 0);
   slip.totalDeductions =
-    slip.lopDeduction +
-    slip.pfDeduction +
-    slip.taxDeduction +
-    slip.professionalTax +
-    slip.otherDeductions;
+    (slip.lopDeduction || 0) +
+    (slip.pfDeduction || 0) +
+    (slip.taxDeduction || 0) +
+    (slip.professionalTax || 0) +
+    (slip.otherDeductions || 0);
   slip.netSalary = Math.max(0, totalEarnings - slip.totalDeductions);
+
+  await slip.save();
+  return slip;
+};
+
+export const recordPaymentProof = async (
+  id: string,
+  data: {
+    status?: "PAID" | "PROCESSED" | "DRAFT" | "PENDING";
+    paidVia?: string;
+    paymentReference?: string;
+    paymentDate?: Date | string;
+    paidProofUrl?: string;
+    paidProofName?: string;
+    notes?: string;
+  }
+): Promise<ISalarySlip> => {
+  const slip = await SalarySlip.findById(id);
+  if (!slip) {
+    throw new Error("Salary slip not found");
+  }
+
+  slip.status = data.status || "PAID";
+  if (data.paidVia) slip.paidVia = data.paidVia;
+  if (data.paymentReference !== undefined) slip.paymentReference = data.paymentReference;
+  slip.paymentDate = data.paymentDate ? new Date(data.paymentDate) : new Date();
+  if (data.paidProofUrl !== undefined) slip.paidProofUrl = data.paidProofUrl;
+  if (data.paidProofName !== undefined) slip.paidProofName = data.paidProofName;
+  if (data.notes !== undefined) slip.notes = data.notes;
+
+  await slip.save();
+  return slip;
+};
+
+export const raiseSalarySlipQuery = async (
+  slipId: string,
+  userId: string,
+  data: {
+    queryType: string;
+    subject: string;
+    description: string;
+  }
+): Promise<ISalarySlip> => {
+  const employee = await ensureEmployeeForUser(userId);
+  const slip = await SalarySlip.findOne({ _id: slipId, employeeId: employee._id });
+  if (!slip) {
+    throw new Error("Salary slip not found or unauthorized");
+  }
+
+  if (!slip.queries) {
+    slip.queries = [];
+  }
+
+  slip.queries.push({
+    queryType: data.queryType || "General Query",
+    subject: data.subject,
+    description: data.description,
+    status: "OPEN",
+    raisedAt: new Date(),
+    hrRemarks: "",
+  } as any);
+
+  await slip.save();
+  return slip;
+};
+
+export const updateSalarySlipQuery = async (
+  slipId: string,
+  queryId: string,
+  hrUserId: string,
+  data: {
+    status: "OPEN" | "IN_REVIEW" | "RESOLVED" | "REJECTED";
+    hrRemarks?: string;
+  }
+): Promise<ISalarySlip> => {
+  const slip = await SalarySlip.findById(slipId);
+  if (!slip) {
+    throw new Error("Salary slip not found");
+  }
+
+  const query = slip.queries?.find((q: any) => q._id?.toString() === queryId);
+  if (!query) {
+    throw new Error("Query not found on this salary slip");
+  }
+
+  if (data.status) query.status = data.status;
+  if (data.hrRemarks !== undefined) query.hrRemarks = data.hrRemarks;
+  if (data.status === "RESOLVED" || data.status === "REJECTED") {
+    query.resolvedAt = new Date();
+    query.resolvedBy = new mongoose.Types.ObjectId(hrUserId);
+  }
 
   await slip.save();
   return slip;

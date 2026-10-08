@@ -65,9 +65,52 @@ export const publishMonthlyPayroll = async (
 
 export const updateSalarySlip = async (
   id: string,
-  data: Partial<SalarySlip>
+  data: Partial<SalarySlip> & { basicSalary?: number; baseSalary?: number }
 ): Promise<ApiResponse<SalarySlip>> => {
   const res = await api.patch<ApiResponse<SalarySlip>>(`/payroll/slips/${id}`, data);
+  return res.data;
+};
+
+export const recordPayment = async (
+  id: string,
+  data: {
+    status?: string;
+    paidVia?: string;
+    paymentReference?: string;
+    paymentDate?: string;
+    paidProofUrl?: string;
+    paidProofName?: string;
+    notes?: string;
+  }
+): Promise<ApiResponse<SalarySlip>> => {
+  const res = await api.patch<ApiResponse<SalarySlip>>(`/payroll/slips/${id}/payment`, data);
+  return res.data;
+};
+
+export const raiseSalarySlipQuery = async (
+  id: string,
+  data: {
+    queryType: string;
+    subject: string;
+    description: string;
+  }
+): Promise<ApiResponse<SalarySlip>> => {
+  const res = await api.post<ApiResponse<SalarySlip>>(`/payroll/slips/${id}/queries`, data);
+  return res.data;
+};
+
+export const updateSalarySlipQuery = async (
+  id: string,
+  queryId: string,
+  data: {
+    status: string;
+    hrRemarks?: string;
+  }
+): Promise<ApiResponse<SalarySlip>> => {
+  const res = await api.patch<ApiResponse<SalarySlip>>(
+    `/payroll/slips/${id}/queries/${queryId}`,
+    data
+  );
   return res.data;
 };
 

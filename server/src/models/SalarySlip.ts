@@ -42,6 +42,21 @@ export interface ISalarySlip extends Document {
   uanNumber?: string;
   pfNumber?: string;
   notes?: string;
+  paidVia?: string;
+  paymentReference?: string;
+  paidProofUrl?: string;
+  paidProofName?: string;
+  queries?: Array<{
+    _id?: mongoose.Types.ObjectId;
+    queryType: string;
+    subject: string;
+    description: string;
+    status: "OPEN" | "IN_REVIEW" | "RESOLVED" | "REJECTED";
+    raisedAt: Date;
+    resolvedAt?: Date;
+    hrRemarks?: string;
+    resolvedBy?: mongoose.Types.ObjectId;
+  }>;
 
   createdAt: Date;
   updatedAt: Date;
@@ -149,7 +164,7 @@ const salarySlipSchema = new Schema<ISalarySlip>(
     professionalTax: {
       type: Number,
       required: true,
-      default: 200,
+      default: 0,
     },
     otherDeductions: {
       type: Number,
@@ -197,6 +212,58 @@ const salarySlipSchema = new Schema<ISalarySlip>(
     notes: {
       type: String,
     },
+    paidVia: {
+      type: String,
+      default: "Bank Transfer (NEFT/RTGS)",
+    },
+    paymentReference: {
+      type: String,
+      default: "",
+    },
+    paidProofUrl: {
+      type: String,
+      default: "",
+    },
+    paidProofName: {
+      type: String,
+      default: "",
+    },
+    queries: [
+      {
+        queryType: {
+          type: String,
+          default: "General Query",
+        },
+        subject: {
+          type: String,
+          required: true,
+        },
+        description: {
+          type: String,
+          required: true,
+        },
+        status: {
+          type: String,
+          enum: ["OPEN", "IN_REVIEW", "RESOLVED", "REJECTED"],
+          default: "OPEN",
+        },
+        raisedAt: {
+          type: Date,
+          default: Date.now,
+        },
+        resolvedAt: {
+          type: Date,
+        },
+        hrRemarks: {
+          type: String,
+          default: "",
+        },
+        resolvedBy: {
+          type: Schema.Types.ObjectId,
+          ref: "User",
+        },
+      },
+    ],
   },
   {
     timestamps: true,

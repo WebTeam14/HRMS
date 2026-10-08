@@ -149,6 +149,7 @@ export const updateSalarySlip = async (
     const updated = await payrollService.updateSalarySlip(id, req.body);
     res.status(200).json({
       success: true,
+      message: "Salary slip updated successfully",
       data: updated,
     });
   } catch (error: any) {
@@ -158,3 +159,85 @@ export const updateSalarySlip = async (
     });
   }
 };
+
+export const recordPayment = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const updated = await payrollService.recordPaymentProof(id, req.body);
+    res.status(200).json({
+      success: true,
+      message: "Payment disbursement and proof recorded successfully",
+      data: updated,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message || "Failed to record payment proof",
+    });
+  }
+};
+
+export const raiseQuery = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      res.status(401).json({ success: false, message: "Authentication required" });
+      return;
+    }
+
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const updated = await payrollService.raiseSalarySlipQuery(id, userId, req.body);
+    res.status(201).json({
+      success: true,
+      message: "Query / problem request submitted to HR successfully",
+      data: updated,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message || "Failed to raise query on salary slip",
+    });
+  }
+};
+
+export const updateQueryStatus = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const hrUserId = req.user?.userId;
+    if (!hrUserId) {
+      res.status(401).json({ success: false, message: "Authentication required" });
+      return;
+    }
+
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const queryId = Array.isArray(req.params.queryId)
+      ? req.params.queryId[0]
+      : req.params.queryId;
+
+    const updated = await payrollService.updateSalarySlipQuery(
+      id,
+      queryId,
+      hrUserId,
+      req.body
+    );
+    res.status(200).json({
+      success: true,
+      message: "Employee payroll query updated successfully",
+      data: updated,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message || "Failed to update payroll query",
+    });
+  }
+};
+

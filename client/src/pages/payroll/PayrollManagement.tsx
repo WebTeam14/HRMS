@@ -14,6 +14,10 @@ import {
   FileText,
   CreditCard,
   ShieldCheck,
+  Upload,
+  Paperclip,
+  MessageSquare,
+  Eye,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -21,6 +25,8 @@ import {
   calculateMonthlyPayroll,
   publishMonthlyPayroll,
   updateSalarySlip,
+  recordPayment,
+  updateSalarySlipQuery,
   formatCurrency,
 } from "../../services/payrollService";
 import type { SalarySlip, SalarySummary } from "../../types";
@@ -127,17 +133,48 @@ const PayrollManagement = () => {
   const [selectedSlip, setSelectedSlip] = useState<SalarySlip | null>(null);
 
   // Edit Slip Modal State
+  // Edit Slip Modal State (Manual Entry: Base Salary, Incentive, Tax/TDS, Other Deductions)
   const [editingSlip, setEditingSlip] = useState<SalarySlip | null>(null);
   const [editForm, setEditForm] = useState({
-    grossSalary: 0,
+    baseSalary: 0,
     incentives: 0,
     reimbursements: 0,
-    pfDeduction: 0,
     taxDeduction: 0,
     otherDeductions: 0,
+    pfDeduction: 0,
     notes: "",
   });
   const [savingEdit, setSavingEdit] = useState(false);
+
+  // Payment Proof Modal State
+  const [paymentSlip, setPaymentSlip] = useState<SalarySlip | null>(null);
+  const [paymentForm, setPaymentForm] = useState({
+    status: "PAID",
+    paidVia: "Bank Transfer (NEFT/RTGS)",
+    customPaidVia: "",
+    paymentReference: "",
+    paymentDate: new Date().toISOString().split("T")[0],
+    paidProofUrl: "",
+    paidProofName: "",
+    notes: "",
+  });
+  const [savingPayment, setSavingPayment] = useState(false);
+  const [proofPreviewModal, setProofPreviewModal] = useState<{ url: string; name: string } | null>(null);
+
+  // Employee Queries Modal State for HR
+  const [queryModalSlip, setQueryModalSlip] = useState<SalarySlip | null>(null);
+  const [respondingQueryId, setRespondingQueryId] = useState<string | null>(null);
+  const [hrResponseForm, setHrResponseForm] = useState<{
+    status: "OPEN" | "IN_REVIEW" | "RESOLVED" | "REJECTED";
+    hrRemarks: string;
+  }>({
+    status: "RESOLVED",
+    hrRemarks: "",
+  });
+  const [savingQueryResponse, setSavingQueryResponse] = useState(false);
+
+  // Filter for only slips with queries
+  const [filterWithQueriesOnly, setFilterWithQueriesOnly] = useState(false);
 
   const loadPayrollSheet = async () => {
     try {
@@ -200,13 +237,14 @@ const PayrollManagement = () => {
 
   const handleOpenEdit = (slip: SalarySlip) => {
     setEditingSlip(slip);
+    const base = slip.grossSalary || slip.basicSalary || 50000;
     setEditForm({
-      grossSalary: slip.grossSalary || 50000,
+      baseSalary: base,
       incentives: slip.incentives || 0,
       reimbursements: slip.reimbursements || 0,
-      pfDeduction: slip.pfDeduction || 0,
       taxDeduction: slip.taxDeduction || 0,
       otherDeductions: slip.otherDeductions || 0,
+      pfDeduction: slip.pfDeduction || 0,
       notes: slip.notes || "",
     });
   };
@@ -217,22 +255,127 @@ const PayrollManagement = () => {
 
     try {
       setSavingEdit(true);
+      const baseSalary = Number(editForm.baseSalary) || 0;
       await updateSalarySlip(editingSlip._id, {
-        grossSalary: Number(editForm.grossSalary) || 0,
+        baseSalary,
+        grossSalary: baseSalary,
+        basicSalary: Math.round(baseSalary * 0.5),
         incentives: Number(editForm.incentives) || 0,
         reimbursements: Number(editForm.reimbursements) || 0,
-        pfDeduction: Number(editForm.pfDeduction) || 0,
         taxDeduction: Number(editForm.taxDeduction) || 0,
         otherDeductions: Number(editForm.otherDeductions) || 0,
+        pfDeduction: Number(editForm.pfDeduction) || 0,
+        professionalTax: 0, // No default deduction
+        lopDeduction: 0,    // No default deduction
         notes: editForm.notes,
       });
       setEditingSlip(null);
       await loadPayrollSheet();
-      setSuccess("Salary slip & increment adjustments saved successfully!");
+      setSuccess("Compensation updated successfully! (Base Salary, Incentive, Tax/TDS, Other Deductions)");
     } catch (err: any) {
       setError(err?.response?.data?.message || "Failed to update salary slip");
     } finally {
       setSavingEdit(false);
+    }
+  };
+
+  const handleOpenPayment = (slip: SalarySlip) => {
+    setPaymentSlip(slip);
+    const isCustomMethod =
+      slip.paidVia &&
+      ![
+        "Bank Transfer (NEFT/RTGS)",
+        "Direct Deposit (Corporate NetBanking)",
+        "UPI (GPay / PhonePe / Paytm)",
+        "IMPS Immediate Payment",
+        "Company Cheque",
+        "Cash",
+      ].includes(slip.paidVia);
+
+    setPaymentForm({
+      status: slip.status || "PAID",
+      paidVia: isCustomMethod ? "Other" : (slip.paidVia || "Bank Transfer (NEFT/RTGS)"),
+      customPaidVia: isCustomMethod ? (slip.paidVia || "") : "",
+      paymentReference: slip.paymentReference || "",
+      paymentDate: slip.paymentDate ? new Date(slip.paymentDate).toISOString().split("T")[0] : new Date().toISOString().split("T")[0],
+      paidProofUrl: slip.paidProofUrl || "",
+      paidProofName: slip.paidProofName || "",
+      notes: slip.notes || "",
+    });
+  };
+
+  const handleProofFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 6 * 1024 * 1024) {
+      alert("File size exceeds 6MB limit. Please upload a smaller receipt/screenshot.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      setPaymentForm((prev) => ({
+        ...prev,
+        paidProofUrl: result,
+        paidProofName: file.name,
+      }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSavePayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!paymentSlip) return;
+
+    try {
+      setSavingPayment(true);
+      setError(null);
+      const effectivePaidVia = paymentForm.paidVia === "Other" && paymentForm.customPaidVia.trim()
+        ? paymentForm.customPaidVia.trim()
+        : paymentForm.paidVia;
+
+      await recordPayment(paymentSlip._id, {
+        status: paymentForm.status,
+        paidVia: effectivePaidVia,
+        paymentReference: paymentForm.paymentReference,
+        paymentDate: paymentForm.paymentDate,
+        paidProofUrl: paymentForm.paidProofUrl,
+        paidProofName: paymentForm.paidProofName,
+        notes: paymentForm.notes,
+      });
+
+      setSuccess(`Payment disbursement & proof successfully recorded for ${paymentSlip.month} salary!`);
+      setPaymentSlip(null);
+      await loadPayrollSheet();
+    } catch (err: any) {
+      setError(err?.response?.data?.message || "Failed to record payment");
+    } finally {
+      setSavingPayment(false);
+    }
+  };
+
+  const handleSaveQueryResponse = async (queryId: string) => {
+    if (!queryModalSlip) return;
+
+    try {
+      setSavingQueryResponse(true);
+      setError(null);
+      const res = await updateSalarySlipQuery(queryModalSlip._id, queryId, {
+        status: hrResponseForm.status,
+        hrRemarks: hrResponseForm.hrRemarks,
+      });
+
+      setQueryModalSlip(res.data);
+      setRespondingQueryId(null);
+      setHrResponseForm({ status: "RESOLVED", hrRemarks: "" });
+      setSuccess("Employee payroll query status & HR remarks updated successfully!");
+      await loadPayrollSheet();
+    } catch (err: any) {
+      setError(err?.response?.data?.message || "Failed to update employee query");
+    } finally {
+      setSavingQueryResponse(false);
     }
   };
 
@@ -492,18 +635,57 @@ const PayrollManagement = () => {
             </p>
           </div>
 
-          <span
-            style={{
-              fontSize: "12px",
-              fontWeight: 600,
-              padding: "4px 10px",
-              borderRadius: "6px",
-              background: "#f1f5f9",
-              color: "#334155",
-            }}
-          >
-            {slips.length} Records
-          </span>
+          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+            <button
+              type="button"
+              onClick={() => setFilterWithQueriesOnly(false)}
+              style={{
+                fontSize: "12px",
+                fontWeight: 600,
+                padding: "6px 12px",
+                borderRadius: "6px",
+                background: !filterWithQueriesOnly ? "#2563eb" : "#f1f5f9",
+                color: !filterWithQueriesOnly ? "white" : "#475569",
+                border: "none",
+                cursor: "pointer",
+              }}
+            >
+              All Records ({slips.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilterWithQueriesOnly(true)}
+              style={{
+                fontSize: "12px",
+                fontWeight: 600,
+                padding: "6px 12px",
+                borderRadius: "6px",
+                background: filterWithQueriesOnly ? "#f59e0b" : "#fffbeb",
+                color: filterWithQueriesOnly ? "white" : "#b45309",
+                border: "1px solid #fde68a",
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+              }}
+            >
+              <MessageSquare size={13} />
+              Employee Queries ({slips.reduce((sum, s) => sum + (s.queries?.length || 0), 0)})
+              {slips.some((s) => s.queries?.some((q) => q.status === "OPEN")) && (
+                <span
+                  style={{
+                    background: "#dc2626",
+                    color: "white",
+                    padding: "1px 5px",
+                    borderRadius: "10px",
+                    fontSize: "10px",
+                  }}
+                >
+                  {slips.reduce((sum, s) => sum + (s.queries?.filter((q) => q.status === "OPEN").length || 0), 0)} Open
+                </span>
+              )}
+            </button>
+          </div>
         </div>
 
         {loading ? (
@@ -538,12 +720,15 @@ const PayrollManagement = () => {
                   <th>Gross Earned</th>
                   <th>Deductions</th>
                   <th>Net Take-Home</th>
-                  <th>Status</th>
+                  <th>Status & Payment</th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {slips.map((s) => {
+                {(filterWithQueriesOnly
+                  ? slips.filter((s) => (s.queries?.length || 0) > 0)
+                  : slips
+                ).map((s) => {
                   const emp: any = s.employeeId;
                   const empName = emp?.firstName ? `${emp.firstName} ${emp.lastName}` : "Employee";
                   const empCode = emp?.employeeCode || "";
@@ -612,11 +797,15 @@ const PayrollManagement = () => {
                         </strong>
                       </td>
                       <td>
-                        <div style={{ fontSize: "12px", color: "#dc2626" }}>
-                          <span>−{formatCurrency(s.totalDeductions)}</span>
-                          <small style={{ display: "block", color: "#94a3b8" }}>
-                            PF: {formatCurrency(s.pfDeduction)} • Tax: {formatCurrency(s.taxDeduction)}
-                          </small>
+                        <div style={{ fontSize: "12px", color: s.totalDeductions > 0 ? "#dc2626" : "#64748b" }}>
+                          <span>{s.totalDeductions > 0 ? `−${formatCurrency(s.totalDeductions)}` : "₹0 (No Deductions)"}</span>
+                          {s.totalDeductions > 0 && (
+                            <small style={{ display: "block", color: "#94a3b8" }}>
+                              {s.taxDeduction > 0 ? `Tax: ${formatCurrency(s.taxDeduction)} ` : ""}
+                              {s.otherDeductions > 0 ? `Other: ${formatCurrency(s.otherDeductions)} ` : ""}
+                              {s.pfDeduction > 0 ? `PF: ${formatCurrency(s.pfDeduction)}` : ""}
+                            </small>
+                          )}
                         </div>
                       </td>
                       <td>
@@ -625,25 +814,94 @@ const PayrollManagement = () => {
                         </strong>
                       </td>
                       <td>
-                        <span
-                          className={`status-badge ${
-                            s.status === "PAID"
-                              ? "status-active"
-                              : s.status === "PROCESSED"
-                              ? "status-notice"
-                              : "status-leave"
-                          }`}
-                        >
-                          {s.status}
-                        </span>
+                        <div>
+                          <span
+                            className={`status-badge ${
+                              s.status === "PAID"
+                                ? "status-active"
+                                : s.status === "PROCESSED"
+                                ? "status-notice"
+                                : "status-leave"
+                            }`}
+                          >
+                            {s.status}
+                          </span>
+                          {s.status === "PAID" && (
+                            <div style={{ marginTop: "4px", fontSize: "11px", color: "#64748b" }}>
+                              <span style={{ display: "block", color: "#0f172a", fontWeight: 600 }}>
+                                {s.paidVia || "Bank Transfer"}
+                              </span>
+                              {s.paidProofUrl ? (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setProofPreviewModal({
+                                      url: s.paidProofUrl!,
+                                      name: s.paidProofName || "Payment Proof",
+                                    })
+                                  }
+                                  style={{
+                                    padding: "2px 6px",
+                                    marginTop: "2px",
+                                    fontSize: "10px",
+                                    fontWeight: 700,
+                                    background: "#dcfce7",
+                                    color: "#15803d",
+                                    border: "1px solid #86efac",
+                                    borderRadius: "4px",
+                                    cursor: "pointer",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "3px",
+                                  }}
+                                >
+                                  <Paperclip size={10} /> Proof Attached
+                                </button>
+                              ) : (
+                                <span style={{ fontSize: "10px", color: "#94a3b8" }}>No proof</span>
+                              )}
+                            </div>
+                          )}
+                          {s.queries && s.queries.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setQueryModalSlip(s)}
+                              style={{
+                                marginTop: "4px",
+                                padding: "2px 6px",
+                                fontSize: "10px",
+                                fontWeight: 700,
+                                background: s.queries.some((q) => q.status === "OPEN")
+                                  ? "#fef3c7"
+                                  : "#e0f2fe",
+                                color: s.queries.some((q) => q.status === "OPEN")
+                                  ? "#b45309"
+                                  : "#0369a1",
+                                border: s.queries.some((q) => q.status === "OPEN")
+                                  ? "1px solid #fde68a"
+                                  : "1px solid #bae6fd",
+                                borderRadius: "4px",
+                                cursor: "pointer",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "3px",
+                              }}
+                            >
+                              <MessageSquare size={10} />
+                              {s.queries.some((q) => q.status === "OPEN")
+                                ? `⚠️ ${s.queries.filter((q) => q.status === "OPEN").length} Open Query`
+                                : `${s.queries.length} Queries`}
+                            </button>
+                          )}
+                        </div>
                       </td>
                       <td>
-                        <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                        <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" }}>
                           <button
                             type="button"
                             onClick={() => setSelectedSlip(s)}
                             style={{
-                              padding: "6px 10px",
+                              padding: "6px 9px",
                               fontSize: "12px",
                               fontWeight: 600,
                               background: "#0f172a",
@@ -655,26 +913,77 @@ const PayrollManagement = () => {
                               alignItems: "center",
                               gap: "4px",
                             }}
+                            title="View Softcopy Slip"
                           >
                             <FileText size={13} /> Softcopy
                           </button>
 
                           <button
                             type="button"
-                            onClick={() => handleOpenEdit(s)}
+                            onClick={() => handleOpenPayment(s)}
                             style={{
-                              padding: "6px 8px",
+                              padding: "6px 9px",
                               fontSize: "12px",
-                              background: "#f1f5f9",
-                              color: "#334155",
-                              border: "1px solid #cbd5e1",
+                              fontWeight: 600,
+                              background:
+                                s.status === "PAID" && s.paidProofUrl ? "#ecfdf5" : "#eff6ff",
+                              color:
+                                s.status === "PAID" && s.paidProofUrl ? "#059669" : "#2563eb",
+                              border:
+                                s.status === "PAID" && s.paidProofUrl
+                                  ? "1px solid #a7f3d0"
+                                  : "1px solid #bfdbfe",
                               borderRadius: "6px",
                               cursor: "pointer",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "4px",
                             }}
-                            title="Adjust Allowance / Notes"
+                            title="Disburse / Upload Payment Proof & Mode"
                           >
-                            <Edit size={13} />
+                            <CreditCard size={13} />{" "}
+                            {s.status === "PAID" ? "Payment Proof" : "Mark Paid"}
                           </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEdit(s)}
+                            style={{
+                              padding: "6px 10px",
+                              fontSize: "12px",
+                              fontWeight: 600,
+                              background: "#f8fafc",
+                              color: "#2563eb",
+                              border: "1px solid #bfdbfe",
+                              borderRadius: "6px",
+                              cursor: "pointer",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "4px",
+                            }}
+                            title="Adjust Employee Compensation (Base Salary, Incentive, Tax/TDS, Other Deductions)"
+                          >
+                            <Edit size={13} /> Adjust Comp
+                          </button>
+
+                          {s.queries && s.queries.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setQueryModalSlip(s)}
+                              style={{
+                                padding: "6px 8px",
+                                fontSize: "12px",
+                                background: "#fffbeb",
+                                color: "#b45309",
+                                border: "1px solid #fde68a",
+                                borderRadius: "6px",
+                                cursor: "pointer",
+                              }}
+                              title="View & Respond to Employee Queries"
+                            >
+                              <MessageSquare size={13} />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -995,6 +1304,78 @@ const PayrollManagement = () => {
                 </div>
               </div>
 
+              {/* Payment Disbursement & Proof Details */}
+              <div
+                style={{
+                  background: "#f8fafc",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "8px",
+                  padding: "14px 18px",
+                  marginBottom: "16px",
+                  fontSize: "12px",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                  <strong style={{ color: "#0f172a", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <CreditCard size={16} color="#2563eb" /> Disbursement & Payment Proof Record
+                  </strong>
+                  <span
+                    className={`status-badge ${
+                      selectedSlip.status === "PAID"
+                        ? "status-active"
+                        : selectedSlip.status === "PROCESSED"
+                        ? "status-notice"
+                        : "status-leave"
+                    }`}
+                  >
+                    {selectedSlip.status}
+                  </span>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px", fontSize: "12px" }}>
+                  <div>
+                    <span style={{ color: "#64748b", display: "block" }}>Paid Via:</span>
+                    <strong style={{ color: "#0f172a" }}>{selectedSlip.paidVia || "Bank Transfer (NEFT/RTGS)"}</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: "#64748b", display: "block" }}>Payment Date:</span>
+                    <strong>{selectedSlip.paymentDate ? new Date(selectedSlip.paymentDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: "#64748b", display: "block" }}>Transaction / UTR Ref:</span>
+                    <strong>{selectedSlip.paymentReference || "—"}</strong>
+                  </div>
+                </div>
+
+                <div style={{ marginTop: "10px", paddingTop: "8px", borderTop: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  {selectedSlip.paidProofUrl ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <span style={{ color: "#16a34a", fontWeight: 600, fontSize: "11px" }}>✓ Payment Proof Attached:</span>
+                      <button
+                        type="button"
+                        onClick={() => setProofPreviewModal({ url: selectedSlip.paidProofUrl!, name: selectedSlip.paidProofName || "Payment Proof" })}
+                        style={{ padding: "4px 10px", fontSize: "11px", fontWeight: 600, background: "#2563eb", color: "white", border: "none", borderRadius: "5px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                      >
+                        <Eye size={12} /> View / Download Proof
+                      </button>
+                    </div>
+                  ) : (
+                    <span style={{ color: "#94a3b8", fontSize: "11px" }}>No payment receipt attached yet.</span>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const slip = selectedSlip;
+                      setSelectedSlip(null);
+                      handleOpenPayment(slip);
+                    }}
+                    style={{ padding: "4px 10px", fontSize: "11px", fontWeight: 600, background: "#f1f5f9", border: "1px solid #cbd5e1", borderRadius: "5px", cursor: "pointer" }}
+                  >
+                    💳 Update Payment & Proof
+                  </button>
+                </div>
+              </div>
+
               {/* Signatures & Seal Footer */}
               <div
                 style={{
@@ -1023,21 +1404,34 @@ const PayrollManagement = () => {
         </div>
       )}
 
-      {/* Edit Salary Slip Modal */}
+      {/* Edit Salary Slip Modal (Manual Entry for Base Salary, Incentive, Tax/TDS, Other Deductions) */}
       {editingSlip && (() => {
-        const previewGross = (Number(editForm.grossSalary) || 0);
-        const previewEarnings = previewGross + (Number(editForm.incentives) || 0) + (Number(editForm.reimbursements) || 0);
-        const previewDeductions = (editingSlip.lopDeduction || 0) + (Number(editForm.pfDeduction) || 0) + (Number(editForm.taxDeduction) || 0) + (editingSlip.professionalTax || 200) + (Number(editForm.otherDeductions) || 0);
+        const previewBase = Number(editForm.baseSalary) || 0;
+        const previewIncentives = Number(editForm.incentives) || 0;
+        const previewReimb = Number(editForm.reimbursements) || 0;
+        const previewEarnings = previewBase + previewIncentives + previewReimb;
+
+        const previewTax = Number(editForm.taxDeduction) || 0;
+        const previewOther = Number(editForm.otherDeductions) || 0;
+        const previewPf = Number(editForm.pfDeduction) || 0;
+        // Total deductions directly from form (no hidden professional tax or LOP)
+        const previewDeductions = previewTax + previewOther + previewPf;
         const previewNet = Math.max(0, previewEarnings - previewDeductions);
+
+        const emp: any = editingSlip.employeeId;
+        const empName = emp?.firstName ? `${emp.firstName} ${emp.lastName}` : "Employee";
+        const empCode = emp?.employeeCode || "";
 
         return (
           <div className="modal-overlay" style={{ zIndex: 1200 }}>
-            <div className="modal" style={{ maxWidth: "560px", padding: "24px" }}>
+            <div className="modal" style={{ maxWidth: "620px", padding: "24px" }}>
               <div className="modal-header">
                 <div>
-                  <h3 style={{ margin: 0, fontSize: "17px" }}>Adjust Employee Compensation</h3>
-                  <p style={{ margin: "2px 0 0", fontSize: "12px", color: "#64748b" }}>
-                    Update base package (increments), incentives, reimbursements & deductions.
+                  <h3 style={{ margin: 0, fontSize: "17px", display: "flex", alignItems: "center", gap: "8px" }}>
+                    <Edit size={18} color="#2563eb" /> Adjust Employee Compensation
+                  </h3>
+                  <p style={{ margin: "3px 0 0", fontSize: "12px", color: "#64748b" }}>
+                    {empName} ({empCode}) • Manual entry for Base Salary, Incentives, Tax/TDS & Other Deductions
                   </p>
                 </div>
                 <button
@@ -1050,118 +1444,200 @@ const PayrollManagement = () => {
               </div>
 
               <form onSubmit={handleSaveEdit}>
-                <div className="modal-body" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", padding: "16px 0" }}>
-                  <div className="form-group" style={{ gridColumn: "span 2" }}>
-                    <label style={{ fontWeight: 700, color: "#0f172a" }}>Base Monthly Package / CTC (₹) [Salary Increment]</label>
-                    <input
-                      type="number"
-                      value={editForm.grossSalary}
-                      onChange={(e) =>
-                        setEditForm({ ...editForm, grossSalary: Number(e.target.value) })
+                <div style={{ padding: "16px 0 8px" }}>
+                  {/* Info notice about default ₹0 deductions */}
+                  <div
+                    style={{
+                      background: "#eff6ff",
+                      border: "1px solid #bfdbfe",
+                      borderRadius: "8px",
+                      padding: "10px 14px",
+                      marginBottom: "16px",
+                      fontSize: "12px",
+                      color: "#1e40af",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "10px",
+                    }}
+                  >
+                    <div>
+                      <strong>ℹ️ Deductions Default to ₹0:</strong> Deductions will only apply if manually specified.
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setEditForm({
+                          ...editForm,
+                          taxDeduction: 0,
+                          otherDeductions: 0,
+                          pfDeduction: 0,
+                        })
                       }
-                      style={{ fontWeight: 700, color: "#2563eb", background: "#f8fafc" }}
-                    />
-                    <small style={{ color: "#64748b", fontSize: "11px" }}>Actual base monthly package for employee increment / revisions.</small>
+                      style={{
+                        padding: "4px 8px",
+                        fontSize: "11px",
+                        fontWeight: 600,
+                        background: "#ffffff",
+                        color: "#2563eb",
+                        border: "1px solid #bfdbfe",
+                        borderRadius: "5px",
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      Clear Deductions to ₹0
+                    </button>
                   </div>
 
-                  <div className="form-group">
-                    <label>Incentives & Performance Bonus (₹)</label>
-                    <input
-                      type="number"
-                      value={editForm.incentives}
-                      onChange={(e) =>
-                        setEditForm({ ...editForm, incentives: Number(e.target.value) })
-                      }
-                      placeholder="e.g. 5000"
-                    />
+                  <div style={{ marginBottom: "16px" }}>
+                    <span style={{ fontSize: "12px", fontWeight: 700, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                      1. Compensation & Additions
+                    </span>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginTop: "8px" }}>
+                      <div className="form-group" style={{ gridColumn: "span 2" }}>
+                        <label style={{ fontWeight: 700, color: "#0f172a" }}>
+                          Base Salary (₹) [Monthly Base CTC]
+                        </label>
+                        <input
+                          type="number"
+                          value={editForm.baseSalary}
+                          onChange={(e) =>
+                            setEditForm({ ...editForm, baseSalary: Number(e.target.value) })
+                          }
+                          style={{ fontWeight: 700, color: "#2563eb", fontSize: "15px", background: "#f8fafc" }}
+                          placeholder="e.g. 50000"
+                          required
+                        />
+                        <small style={{ color: "#64748b", fontSize: "11px" }}>
+                          Auto-computes Basic (50%), HRA (25%), Special Allowance (25%)
+                        </small>
+                      </div>
+
+                      <div className="form-group">
+                        <label style={{ fontWeight: 700, color: "#059669" }}>
+                          Incentives & Bonus (₹)
+                        </label>
+                        <input
+                          type="number"
+                          value={editForm.incentives}
+                          onChange={(e) =>
+                            setEditForm({ ...editForm, incentives: Number(e.target.value) })
+                          }
+                          placeholder="0 (No incentive)"
+                        />
+                        <small style={{ color: "#64748b", fontSize: "11px" }}>Performance bonus or commission</small>
+                      </div>
+
+                      <div className="form-group">
+                        <label style={{ fontWeight: 600, color: "#334155" }}>
+                          Expense Reimbursements (₹)
+                        </label>
+                        <input
+                          type="number"
+                          value={editForm.reimbursements}
+                          onChange={(e) =>
+                            setEditForm({ ...editForm, reimbursements: Number(e.target.value) })
+                          }
+                          placeholder="0"
+                        />
+                        <small style={{ color: "#64748b", fontSize: "11px" }}>Approved claims or travel</small>
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="form-group">
-                    <label>Expense Reimbursements (₹)</label>
-                    <input
-                      type="number"
-                      value={editForm.reimbursements}
-                      onChange={(e) =>
-                        setEditForm({ ...editForm, reimbursements: Number(e.target.value) })
-                      }
-                      placeholder="e.g. 2500"
-                    />
-                  </div>
+                  <div style={{ marginBottom: "16px" }}>
+                    <span style={{ fontSize: "12px", fontWeight: 700, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                      2. Deductions (Defaults to ₹0)
+                    </span>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginTop: "8px" }}>
+                      <div className="form-group">
+                        <label style={{ fontWeight: 700, color: "#dc2626" }}>
+                          Tax / TDS Deduction (₹)
+                        </label>
+                        <input
+                          type="number"
+                          value={editForm.taxDeduction}
+                          onChange={(e) =>
+                            setEditForm({ ...editForm, taxDeduction: Number(e.target.value) })
+                          }
+                          placeholder="0 (Default: ₹0)"
+                        />
+                        <small style={{ color: "#64748b", fontSize: "11px" }}>Tax withholding (default ₹0)</small>
+                      </div>
 
-                  <div className="form-group">
-                    <label>PF Deduction (₹) [Optional]</label>
-                    <input
-                      type="number"
-                      value={editForm.pfDeduction}
-                      onChange={(e) =>
-                        setEditForm({ ...editForm, pfDeduction: Number(e.target.value) })
-                      }
-                      placeholder="0 (No PF)"
-                    />
-                  </div>
+                      <div className="form-group">
+                        <label style={{ fontWeight: 700, color: "#dc2626" }}>
+                          Other Deductions / Advance (₹)
+                        </label>
+                        <input
+                          type="number"
+                          value={editForm.otherDeductions}
+                          onChange={(e) =>
+                            setEditForm({ ...editForm, otherDeductions: Number(e.target.value) })
+                          }
+                          placeholder="0 (Default: ₹0)"
+                        />
+                        <small style={{ color: "#64748b", fontSize: "11px" }}>Salary advance or other cuts (default ₹0)</small>
+                      </div>
 
-                  <div className="form-group">
-                    <label>Tax Withholding / TDS (₹)</label>
-                    <input
-                      type="number"
-                      value={editForm.taxDeduction}
-                      onChange={(e) =>
-                        setEditForm({ ...editForm, taxDeduction: Number(e.target.value) })
-                      }
-                    />
-                  </div>
+                      <div className="form-group">
+                        <label style={{ fontWeight: 600, color: "#475569" }}>
+                          PF Deduction (₹) [Optional]
+                        </label>
+                        <input
+                          type="number"
+                          value={editForm.pfDeduction}
+                          onChange={(e) =>
+                            setEditForm({ ...editForm, pfDeduction: Number(e.target.value) })
+                          }
+                          placeholder="0 (Default: ₹0)"
+                        />
+                        <small style={{ color: "#64748b", fontSize: "11px" }}>Employee PF if applicable (default ₹0)</small>
+                      </div>
 
-                  <div className="form-group" style={{ gridColumn: "span 2" }}>
-                    <label>Other Deductions / Advance Recovery (₹)</label>
-                    <input
-                      type="number"
-                      value={editForm.otherDeductions}
-                      onChange={(e) =>
-                        setEditForm({ ...editForm, otherDeductions: Number(e.target.value) })
-                      }
-                    />
-                  </div>
-
-                  <div className="form-group" style={{ gridColumn: "span 2" }}>
-                    <label>Notes / Remarks</label>
-                    <textarea
-                      rows={2}
-                      placeholder="e.g. Salary increment + travel expense reimbursement included..."
-                      value={editForm.notes}
-                      onChange={(e) =>
-                        setEditForm({ ...editForm, notes: e.target.value })
-                      }
-                    />
+                      <div className="form-group">
+                        <label style={{ fontWeight: 600, color: "#475569" }}>Notes / Remarks</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Compensation adjusted"
+                          value={editForm.notes}
+                          onChange={(e) =>
+                            setEditForm({ ...editForm, notes: e.target.value })
+                          }
+                        />
+                        <small style={{ color: "#64748b", fontSize: "11px" }}>Recorded in salary slip audit</small>
+                      </div>
+                    </div>
                   </div>
 
                   {/* Real-time Calculation Summary Box */}
                   <div
                     style={{
-                      gridColumn: "span 2",
                       background: "#f0fdf4",
                       border: "1px solid #bbf7d0",
                       borderRadius: "8px",
-                      padding: "12px 16px",
+                      padding: "14px 18px",
                       display: "flex",
                       justifyContent: "space-between",
                       alignItems: "center",
                     }}
                   >
                     <div>
-                      <span style={{ fontSize: "11px", fontWeight: 700, color: "#166534", textTransform: "uppercase" }}>
-                        CALCULATED NET TAKE-HOME
+                      <span style={{ fontSize: "11px", fontWeight: 700, color: "#166534", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                        CALCULATED NET TAKE-HOME PAY
                       </span>
-                      <div style={{ fontSize: "11px", color: "#15803d" }}>
-                        Total Earnings ({formatCurrency(previewEarnings)}) − Deductions ({formatCurrency(previewDeductions)})
+                      <div style={{ fontSize: "12px", color: "#15803d", marginTop: "3px" }}>
+                        Earnings ({formatCurrency(previewEarnings)}) − Deductions ({formatCurrency(previewDeductions)})
                       </div>
                     </div>
-                    <div style={{ fontSize: "20px", fontWeight: 800, color: "#15803d" }}>
+                    <div style={{ fontSize: "22px", fontWeight: 800, color: "#15803d" }}>
                       {formatCurrency(previewNet)}
                     </div>
                   </div>
                 </div>
 
-                <div className="modal-footer">
+                <div className="modal-footer" style={{ borderTop: "1px solid #e2e8f0", paddingTop: "14px", marginTop: "4px" }}>
                   <button
                     type="button"
                     className="secondary-button"
@@ -1174,7 +1650,7 @@ const PayrollManagement = () => {
                     className="primary-button"
                     disabled={savingEdit}
                   >
-                    {savingEdit ? "Saving..." : "Save Adjustments"}
+                    {savingEdit ? "Saving..." : "Save Compensation"}
                   </button>
                 </div>
               </form>
@@ -1182,6 +1658,432 @@ const PayrollManagement = () => {
           </div>
         );
       })()}
+
+      {/* Disburse & Upload Payment Proof Modal */}
+      {paymentSlip && (
+        <div className="modal-overlay" style={{ zIndex: 1250 }}>
+          <div className="modal" style={{ maxWidth: "600px", padding: "26px" }}>
+            <div className="modal-header">
+              <div>
+                <h3 style={{ margin: 0, fontSize: "18px", display: "flex", alignItems: "center", gap: "8px" }}>
+                  <CreditCard size={20} color="#2563eb" /> Record Disbursed Salary & Payment Proof
+                </h3>
+                <p style={{ margin: "3px 0 0", fontSize: "12px", color: "#64748b" }}>
+                  Disbursement details for {paymentSlip.month} {paymentSlip.year} • Net: {formatCurrency(paymentSlip.netSalary)}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="close-button"
+                onClick={() => setPaymentSlip(null)}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSavePayment}>
+              <div className="modal-body" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", padding: "16px 0" }}>
+                <div className="form-group">
+                  <label style={{ fontWeight: 600 }}>Payment Status</label>
+                  <select
+                    value={paymentForm.status}
+                    onChange={(e) => setPaymentForm({ ...paymentForm, status: e.target.value })}
+                    style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #cbd5e1", fontWeight: 600 }}
+                  >
+                    <option value="PAID">PAID (Disbursed to Employee)</option>
+                    <option value="PROCESSED">PROCESSED (Under Bank Processing)</option>
+                    <option value="PENDING">PENDING (On Hold / Awaiting Release)</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label style={{ fontWeight: 600 }}>Payment Date</label>
+                  <input
+                    type="date"
+                    value={paymentForm.paymentDate}
+                    onChange={(e) => setPaymentForm({ ...paymentForm, paymentDate: e.target.value })}
+                    style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #cbd5e1" }}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label style={{ fontWeight: 600 }}>Paid Via (Payment Mode)</label>
+                  <select
+                    value={paymentForm.paidVia}
+                    onChange={(e) => setPaymentForm({ ...paymentForm, paidVia: e.target.value })}
+                    style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #cbd5e1" }}
+                  >
+                    <option value="Bank Transfer (NEFT/RTGS)">Bank Transfer (NEFT/RTGS)</option>
+                    <option value="Direct Deposit (Corporate NetBanking)">Direct Deposit (Corporate NetBanking)</option>
+                    <option value="UPI (GPay / PhonePe / Paytm)">UPI (GPay / PhonePe / Paytm)</option>
+                    <option value="IMPS Immediate Payment">IMPS Immediate Payment</option>
+                    <option value="Company Cheque">Company Cheque</option>
+                    <option value="Cash">Cash Voucher</option>
+                    <option value="Other">Other (Custom)</option>
+                  </select>
+                </div>
+
+                {paymentForm.paidVia === "Other" && (
+                  <div className="form-group">
+                    <label style={{ fontWeight: 600 }}>Custom Payment Method</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Wire Transfer / Third-party Escrow"
+                      value={paymentForm.customPaidVia}
+                      onChange={(e) => setPaymentForm({ ...paymentForm, customPaidVia: e.target.value })}
+                      style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #cbd5e1" }}
+                    />
+                  </div>
+                )}
+
+                <div className="form-group">
+                  <label style={{ fontWeight: 600 }}>Transaction / UTR Reference ID</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. UTR20260928198302"
+                    value={paymentForm.paymentReference}
+                    onChange={(e) => setPaymentForm({ ...paymentForm, paymentReference: e.target.value })}
+                    style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #cbd5e1" }}
+                  />
+                </div>
+
+                {/* Upload Paid Proof */}
+                <div className="form-group" style={{ gridColumn: "span 2" }}>
+                  <label style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: "6px" }}>
+                    <Paperclip size={15} color="#2563eb" /> Upload Payment Proof (Receipt / Screenshot / Bank Advise)
+                  </label>
+                  <div
+                    style={{
+                      border: "2px dashed #cbd5e1",
+                      borderRadius: "10px",
+                      padding: "16px",
+                      textAlign: "center",
+                      background: "#f8fafc",
+                    }}
+                  >
+                    {paymentForm.paidProofUrl ? (
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "white", padding: "10px 14px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "10px", overflow: "hidden" }}>
+                          {paymentForm.paidProofUrl.startsWith("data:image") ? (
+                            <img src={paymentForm.paidProofUrl} alt="Proof" style={{ width: "42px", height: "42px", objectFit: "cover", borderRadius: "6px", border: "1px solid #cbd5e1" }} />
+                          ) : (
+                            <div style={{ width: "42px", height: "42px", background: "#eff6ff", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center", color: "#2563eb" }}>
+                              <FileText size={22} />
+                            </div>
+                          )}
+                          <div style={{ textAlign: "left" }}>
+                            <strong style={{ fontSize: "13px", color: "#0f172a", display: "block" }}>
+                              {paymentForm.paidProofName || "Uploaded Payment Receipt"}
+                            </strong>
+                            <span style={{ fontSize: "11px", color: "#16a34a", fontWeight: 600 }}>✓ Proof Attached</span>
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", gap: "8px" }}>
+                          <button
+                            type="button"
+                            onClick={() => setProofPreviewModal({ url: paymentForm.paidProofUrl, name: paymentForm.paidProofName || "Payment Proof" })}
+                            style={{ padding: "6px 10px", fontSize: "12px", background: "#f1f5f9", border: "1px solid #cbd5e1", borderRadius: "6px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                          >
+                            <Eye size={13} /> View
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPaymentForm({ ...paymentForm, paidProofUrl: "", paidProofName: "" })}
+                            style={{ padding: "6px 10px", fontSize: "12px", background: "#fee2e2", color: "#dc2626", border: "1px solid #fca5a5", borderRadius: "6px", cursor: "pointer" }}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <input
+                          type="file"
+                          id="paid-proof-upload"
+                          accept="image/*,application/pdf"
+                          onChange={handleProofFileUpload}
+                          style={{ display: "none" }}
+                        />
+                        <label
+                          htmlFor="paid-proof-upload"
+                          style={{ cursor: "pointer", display: "inline-flex", flexDirection: "column", alignItems: "center", gap: "6px" }}
+                        >
+                          <div style={{ width: "40px", height: "40px", borderRadius: "50%", background: "#eff6ff", display: "flex", alignItems: "center", justifyContent: "center", color: "#2563eb" }}>
+                            <Upload size={20} />
+                          </div>
+                          <span style={{ fontSize: "13px", fontWeight: 600, color: "#2563eb" }}>
+                            Click to choose or browse receipt / payment proof file
+                          </span>
+                          <span style={{ fontSize: "11px", color: "#64748b" }}>
+                            Supports PNG, JPG, JPEG or PDF (Max 6MB)
+                          </span>
+                        </label>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="form-group" style={{ gridColumn: "span 2" }}>
+                  <label style={{ fontWeight: 600 }}>Disbursement Notes / Remarks</label>
+                  <textarea
+                    rows={2}
+                    placeholder="e.g. Disbursed through corporate batch #04"
+                    value={paymentForm.notes}
+                    onChange={(e) => setPaymentForm({ ...paymentForm, notes: e.target.value })}
+                    style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #cbd5e1" }}
+                  />
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => setPaymentSlip(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="primary-button"
+                  disabled={savingPayment}
+                >
+                  {savingPayment ? "Saving..." : "Save Payment & Proof"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Employee Queries & Disputes Resolution Modal for HR */}
+      {queryModalSlip && (
+        <div className="modal-overlay" style={{ zIndex: 1250 }}>
+          <div className="modal" style={{ maxWidth: "680px", padding: "26px" }}>
+            <div className="modal-header">
+              <div>
+                <h3 style={{ margin: 0, fontSize: "18px", display: "flex", alignItems: "center", gap: "8px" }}>
+                  <MessageSquare size={20} color="#f59e0b" /> Employee Queries & Disputes
+                </h3>
+                <p style={{ margin: "3px 0 0", fontSize: "12px", color: "#64748b" }}>
+                  Slip: {queryModalSlip.month} {queryModalSlip.year} • {(queryModalSlip.employeeId as any)?.firstName} {(queryModalSlip.employeeId as any)?.lastName} ({(queryModalSlip.employeeId as any)?.employeeCode})
+                </p>
+              </div>
+              <button
+                type="button"
+                className="close-button"
+                onClick={() => { setQueryModalSlip(null); setRespondingQueryId(null); }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="modal-body" style={{ padding: "16px 0", maxHeight: "65vh", overflowY: "auto" }}>
+              {(!queryModalSlip.queries || queryModalSlip.queries.length === 0) ? (
+                <div style={{ textAlign: "center", padding: "30px", color: "#64748b" }}>
+                  <CheckCircle2 size={36} color="#16a34a" style={{ margin: "0 auto 10px" }} />
+                  <p style={{ margin: 0, fontWeight: 600 }}>No queries raised by employee for this salary slip.</p>
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                  {queryModalSlip.queries.map((q) => (
+                    <div
+                      key={q._id}
+                      style={{
+                        border: q.status === "OPEN" ? "1.5px solid #f59e0b" : q.status === "RESOLVED" ? "1px solid #bbf7d0" : "1px solid #e2e8f0",
+                        borderRadius: "10px",
+                        padding: "16px",
+                        background: q.status === "OPEN" ? "#fffbeb" : "#ffffff",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <span style={{ fontSize: "11px", fontWeight: 700, padding: "3px 8px", borderRadius: "6px", background: "#e0e7ff", color: "#4338ca" }}>
+                            {q.queryType}
+                          </span>
+                          <strong style={{ fontSize: "14px", color: "#0f172a" }}>{q.subject}</strong>
+                        </div>
+                        <span
+                          style={{
+                            fontSize: "11px",
+                            fontWeight: 700,
+                            padding: "3px 10px",
+                            borderRadius: "12px",
+                            background: q.status === "OPEN" ? "#fef3c7" : q.status === "RESOLVED" ? "#dcfce7" : q.status === "IN_REVIEW" ? "#e0f2fe" : "#fee2e2",
+                            color: q.status === "OPEN" ? "#b45309" : q.status === "RESOLVED" ? "#15803d" : q.status === "IN_REVIEW" ? "#0369a1" : "#b91c1c",
+                          }}
+                        >
+                          {q.status}
+                        </span>
+                      </div>
+
+                      <p style={{ margin: "0 0 10px", fontSize: "13px", color: "#334155", lineHeight: "1.5", whiteSpace: "pre-line" }}>
+                        {q.description}
+                      </p>
+
+                      <div style={{ fontSize: "11px", color: "#64748b", marginBottom: "12px" }}>
+                        Raised on: {new Date(q.raisedAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}
+                        {q.resolvedAt && ` • Resolved on: ${new Date(q.resolvedAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}`}
+                      </div>
+
+                      {q.hrRemarks && (
+                        <div style={{ background: "#f8fafc", borderLeft: "3px solid #2563eb", padding: "10px 14px", borderRadius: "0 6px 6px 0", marginBottom: "12px" }}>
+                          <strong style={{ fontSize: "12px", color: "#1e40af", display: "block", marginBottom: "2px" }}>HR Resolution / Remarks:</strong>
+                          <span style={{ fontSize: "13px", color: "#334155" }}>{q.hrRemarks}</span>
+                        </div>
+                      )}
+
+                      {/* Respond action */}
+                      {respondingQueryId === q._id ? (
+                        <div style={{ background: "#f8fafc", padding: "14px", borderRadius: "8px", border: "1px solid #cbd5e1" }}>
+                          <div style={{ marginBottom: "10px" }}>
+                            <label style={{ fontSize: "12px", fontWeight: 700, display: "block", marginBottom: "4px" }}>Update Query Status:</label>
+                            <select
+                              value={hrResponseForm.status}
+                              onChange={(e) => setHrResponseForm({ ...hrResponseForm, status: e.target.value as any })}
+                              style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "13px" }}
+                            >
+                              <option value="IN_REVIEW">IN_REVIEW (Investigating with Accounts)</option>
+                              <option value="RESOLVED">RESOLVED (Action Taken & Verified)</option>
+                              <option value="REJECTED">REJECTED (Calculation Confirmed Correct)</option>
+                              <option value="OPEN">OPEN</option>
+                            </select>
+                          </div>
+                          <div style={{ marginBottom: "10px" }}>
+                            <label style={{ fontSize: "12px", fontWeight: 700, display: "block", marginBottom: "4px" }}>HR Response / Remarks:</label>
+                            <textarea
+                              rows={3}
+                              value={hrResponseForm.hrRemarks}
+                              onChange={(e) => setHrResponseForm({ ...hrResponseForm, hrRemarks: e.target.value })}
+                              placeholder="Write explanation or confirm correction made (e.g. Added ₹5,000 incentive, updated base salary)..."
+                              style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "13px" }}
+                            />
+                          </div>
+                          <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+                            <button
+                              type="button"
+                              onClick={() => setRespondingQueryId(null)}
+                              style={{ padding: "6px 12px", fontSize: "12px", background: "#e2e8f0", border: "none", borderRadius: "6px", cursor: "pointer" }}
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="button"
+                              disabled={savingQueryResponse}
+                              onClick={() => handleSaveQueryResponse(q._id)}
+                              style={{ padding: "6px 14px", fontSize: "12px", background: "#2563eb", color: "white", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: 600 }}
+                            >
+                              {savingQueryResponse ? "Saving..." : "Save Response"}
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setRespondingQueryId(q._id);
+                              setHrResponseForm({
+                                status: q.status === "OPEN" ? "RESOLVED" : q.status,
+                                hrRemarks: q.hrRemarks || "",
+                              });
+                            }}
+                            style={{ padding: "5px 12px", fontSize: "12px", background: "#f1f5f9", border: "1px solid #cbd5e1", borderRadius: "6px", cursor: "pointer", fontWeight: 600 }}
+                          >
+                            💬 Respond / Update Status
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="modal-footer" style={{ display: "flex", justifyContent: "space-between" }}>
+              <button
+                type="button"
+                onClick={() => {
+                  const slipToEdit = queryModalSlip;
+                  setQueryModalSlip(null);
+                  handleOpenEdit(slipToEdit);
+                }}
+                style={{ padding: "8px 14px", fontSize: "13px", background: "#eff6ff", color: "#2563eb", border: "1px solid #bfdbfe", borderRadius: "8px", cursor: "pointer", fontWeight: 600 }}
+              >
+                ✏️ Adjust Base Salary / Deductions for this Employee
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => { setQueryModalSlip(null); setRespondingQueryId(null); }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Proof Preview Modal */}
+      {proofPreviewModal && (
+        <div className="modal-overlay" style={{ zIndex: 1400 }}>
+          <div className="modal" style={{ maxWidth: "680px", padding: "20px" }}>
+            <div className="modal-header">
+              <h3 style={{ margin: 0, fontSize: "16px" }}>{proofPreviewModal.name}</h3>
+              <button
+                type="button"
+                className="close-button"
+                onClick={() => setProofPreviewModal(null)}
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="modal-body" style={{ textAlign: "center", padding: "16px 0", maxHeight: "70vh", overflowY: "auto" }}>
+              {proofPreviewModal.url.startsWith("data:image") || proofPreviewModal.url.match(/\.(jpeg|jpg|gif|png)$/i) ? (
+                <img
+                  src={proofPreviewModal.url}
+                  alt="Payment Proof"
+                  style={{ maxWidth: "100%", maxHeight: "65vh", objectFit: "contain", borderRadius: "8px", border: "1px solid #e2e8f0" }}
+                />
+              ) : (
+                <div style={{ padding: "40px 20px", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                  <FileText size={48} color="#2563eb" style={{ margin: "0 auto 12px" }} />
+                  <p style={{ fontWeight: 600, color: "#0f172a" }}>PDF / Document Payment Proof Attached</p>
+                  <a
+                    href={proofPreviewModal.url}
+                    download={proofPreviewModal.name || "Payment_Proof.pdf"}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="primary-button"
+                    style={{ display: "inline-flex", alignItems: "center", gap: "6px", textDecoration: "none", marginTop: "10px" }}
+                  >
+                    Download / Open Proof Document
+                  </a>
+                </div>
+              )}
+            </div>
+            <div className="modal-footer" style={{ display: "flex", justifyContent: "space-between" }}>
+              <a
+                href={proofPreviewModal.url}
+                download={proofPreviewModal.name || "Payment_Proof"}
+                target="_blank"
+                rel="noreferrer"
+                className="secondary-button"
+                style={{ textDecoration: "none" }}
+              >
+                Download File
+              </a>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() => setProofPreviewModal(null)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
