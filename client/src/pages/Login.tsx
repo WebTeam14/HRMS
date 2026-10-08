@@ -93,12 +93,6 @@ const Login = () => {
     }
   };
 
-  const handleDemoFill = (demoEmail: string, demoPass: string) => {
-    setEmail(demoEmail);
-    setPassword(demoPass);
-    setError("");
-  };
-
   return (
     <div className="login-page">
       <div className="login-ambient-orb orb-1"></div>
@@ -127,105 +121,6 @@ const Login = () => {
           <div className="login-heading">
             <h2>Welcome Back</h2>
             <p>Sign in with your corporate employee credentials</p>
-          </div>
-
-          {/* Demo Account Quick-Fill Buttons */}
-          <div
-            style={{
-              marginBottom: "16px",
-              padding: "12px",
-              background: "rgba(99, 102, 241, 0.08)",
-              border: "1px solid rgba(99, 102, 241, 0.2)",
-              borderRadius: "10px",
-            }}
-          >
-            <div
-              style={{
-                fontSize: "12px",
-                fontWeight: 600,
-                color: "#818cf8",
-                marginBottom: "8px",
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-              }}
-            >
-              <Sparkles size={12} /> Click to autofill test credentials:
-            </div>
-            <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-              <button
-                type="button"
-                onClick={() =>
-                  handleDemoFill("neeraj@technoriya.com", "Ganesh@Techno")
-                }
-                style={{
-                  padding: "4px 10px",
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  borderRadius: "6px",
-                  border: "1px solid rgba(255,255,255,0.15)",
-                  background: "rgba(255,255,255,0.06)",
-                  color: "#e2e8f0",
-                  cursor: "pointer",
-                }}
-              >
-                👑 CEO / Admin
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  handleDemoFill("hr@technoriya.com", "Laxmi@TETPL")
-                }
-                style={{
-                  padding: "4px 10px",
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  borderRadius: "6px",
-                  border: "1px solid rgba(255,255,255,0.15)",
-                  background: "rgba(255,255,255,0.06)",
-                  color: "#e2e8f0",
-                  cursor: "pointer",
-                }}
-              >
-                👥 HR
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  handleDemoFill("webadmin@technoriya.com", "Mitali@123")
-                }
-                style={{
-                  padding: "4px 10px",
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  borderRadius: "6px",
-                  border: "1px solid rgba(255,255,255,0.15)",
-                  background: "rgba(255,255,255,0.06)",
-                  color: "#e2e8f0",
-                  cursor: "pointer",
-                }}
-              >
-                💻 IT Manager
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  handleDemoFill("web.technoriya@gmail.com", "Shubhasmita@TETPL")
-                }
-                style={{
-                  padding: "4px 10px",
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  borderRadius: "6px",
-                  border: "1px solid rgba(255,255,255,0.15)",
-                  background: "rgba(255,255,255,0.06)",
-                  color: "#e2e8f0",
-                  cursor: "pointer",
-                }}
-              >
-                👤 Employee
-              </button>
-            </div>
           </div>
 
           {error && (
