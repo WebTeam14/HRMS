@@ -20,6 +20,7 @@ export const getMyPayslips = async (
       success: true,
       data: result.slips,
       summary: result.summary,
+      packageInfo: result.packageInfo,
     });
   } catch (error: any) {
     res.status(500).json({

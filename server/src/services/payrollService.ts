@@ -38,7 +38,17 @@ export const seedSamplePayslipsIfEmpty = async (
   const count = await SalarySlip.countDocuments({ employeeId, year: 2026 });
   if (count === 0) {
     const employee = await Employee.findById(employeeId);
-    const baseGross = getStandardPackageForDesignation(employee?.designation);
+    const baseGross = employee?.monthlySalary && employee.monthlySalary > 0
+      ? employee.monthlySalary
+      : getStandardPackageForDesignation(employee?.designation);
+    const prevSalary = employee?.previousSalary && employee.previousSalary > 0
+      ? employee.previousSalary
+      : Math.round(baseGross / 1.15);
+    const incPct = employee?.incrementPercentage !== undefined && employee.incrementPercentage > 0
+      ? employee.incrementPercentage
+      : Math.round(((baseGross - prevSalary) / prevSalary) * 100);
+    const incStatus = employee?.incrementStatus || "INCREMENT APPLIED";
+
     const monthsToGenerate = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 
     for (const mIndex of monthsToGenerate) {
@@ -60,6 +70,10 @@ export const seedSamplePayslipsIfEmpty = async (
       const otherDeductions = 0;
       const totalDeductions = 0;
       const netSalary = baseGross;
+
+      const releaseDate = new Date(2026, mIndex - 1, totalDays);
+      const periodStart = new Date(2026, mIndex - 1, 1);
+      const periodEnd = new Date(2026, mIndex - 1, totalDays);
 
       await SalarySlip.create({
         employeeId,
@@ -85,7 +99,14 @@ export const seedSamplePayslipsIfEmpty = async (
         totalDeductions,
         netSalary,
         status: "PAID",
-        paymentDate: new Date(2026, mIndex - 1, totalDays),
+        paymentDate: releaseDate,
+        salaryReleaseDate: releaseDate,
+        payPeriodStartDate: periodStart,
+        payPeriodEndDate: periodEnd,
+        packageAnnualCtc: baseGross * 12,
+        previousSalary: prevSalary,
+        incrementPercentage: incPct,
+        incrementStatus: incStatus,
         bankAccountLast4: "8942",
         panNumber: "ABCDE1234F",
         uanNumber: "100984729104",
@@ -94,7 +115,7 @@ export const seedSamplePayslipsIfEmpty = async (
         paymentReference: `UTR20260${mIndex}894210`,
         paidProofUrl: "",
         paidProofName: "",
-        notes: `Monthly compensation for ${monthName} 2026 credited via Direct Deposit.`,
+        notes: `Monthly compensation for ${monthName} 2026 released via Direct Deposit.`,
       });
     }
   }
@@ -227,11 +248,18 @@ export const calculateMonthlyPayroll = async (
         netSalary,
         status: "PROCESSED",
         paymentDate: new Date(year, monthIndex - 1, totalDaysInMonth),
+        salaryReleaseDate: new Date(year, monthIndex - 1, totalDaysInMonth),
+        payPeriodStartDate: startDate,
+        payPeriodEndDate: endDate,
+        packageAnnualCtc: baseGross * 12,
+        previousSalary: emp.previousSalary || Math.round(baseGross / 1.15),
+        incrementPercentage: emp.incrementPercentage !== undefined ? emp.incrementPercentage : 15,
+        incrementStatus: emp.incrementStatus || "ACTIVE PACKAGE",
         bankAccountLast4: "8942",
         panNumber: "ABCDE1234F",
         uanNumber: "100984729104",
         pfNumber: "N/A",
-        notes: `Salary computed for ${monthName} ${year} with ${payableDays} payable days (${lopDays} LOP days).`,
+        notes: `Salary computed for ${monthName} ${year} with ${payableDays} payable days (${lopDays} LOP days). Release scheduled for ${totalDaysInMonth} ${monthName} ${year}.`,
       },
       { upsert: true, new: true }
     ).populate({
@@ -340,9 +368,10 @@ export const publishMonthlyPayroll = async (
   monthIndex: number,
   year = 2026
 ): Promise<{ updatedCount: number }> => {
+  const releaseDate = new Date();
   const result = await SalarySlip.updateMany(
     { monthIndex, year },
-    { status: "PAID", paymentDate: new Date() }
+    { status: "PAID", paymentDate: releaseDate, salaryReleaseDate: releaseDate }
   );
 
   return { updatedCount: result.modifiedCount };
@@ -370,6 +399,31 @@ export const updateSalarySlip = async (
     slip.basicSalary = Math.round(manualBase * 0.5);
     slip.hra = Math.round(manualBase * 0.25);
     slip.specialAllowance = Math.max(0, manualBase - (slip.basicSalary + slip.hra));
+    slip.packageAnnualCtc = manualBase * 12;
+
+    // CRITICAL FIX: Synchronize Employee document so employee permanently sees the updated package and increment!
+    const employee = await Employee.findById(slip.employeeId);
+    if (employee) {
+      const oldSalary = employee.monthlySalary || 0;
+      if (oldSalary > 0 && oldSalary !== manualBase) {
+        employee.previousSalary = oldSalary;
+        employee.incrementPercentage = Math.round(((manualBase - oldSalary) / oldSalary) * 100);
+        employee.incrementStatus = manualBase > oldSalary ? "INCREMENT APPLIED" : "REVISED";
+        employee.lastIncrementDate = new Date();
+      } else if (!employee.previousSalary) {
+        employee.previousSalary = Math.round(manualBase / 1.15);
+        employee.incrementPercentage = 15;
+        employee.incrementStatus = "INCREMENT APPLIED";
+        employee.lastIncrementDate = new Date();
+      }
+      employee.monthlySalary = manualBase;
+      employee.annualCtc = manualBase * 12;
+      await employee.save();
+
+      slip.previousSalary = employee.previousSalary;
+      slip.incrementPercentage = employee.incrementPercentage;
+      slip.incrementStatus = employee.incrementStatus;
+    }
   }
 
   // Earnings manual adjustments
@@ -387,10 +441,23 @@ export const updateSalarySlip = async (
   if (updates.lopDeduction !== undefined) slip.lopDeduction = Math.max(0, updates.lopDeduction);
   else slip.lopDeduction = 0; // Default 0
 
+  // Date-wise pay periods and release dates
+  if (!slip.payPeriodStartDate) {
+    slip.payPeriodStartDate = new Date(slip.year, slip.monthIndex - 1, 1);
+  }
+  if (!slip.payPeriodEndDate) {
+    slip.payPeriodEndDate = new Date(slip.year, slip.monthIndex - 1, slip.totalDaysInMonth || 30);
+  }
+  if (updates.paymentDate !== undefined) {
+    slip.paymentDate = updates.paymentDate;
+    slip.salaryReleaseDate = updates.paymentDate;
+  } else if (!slip.salaryReleaseDate) {
+    slip.salaryReleaseDate = slip.paymentDate || new Date(slip.year, slip.monthIndex - 1, slip.totalDaysInMonth || 30);
+  }
+
   // Status & Payment metadata
   if (updates.notes !== undefined) slip.notes = updates.notes;
   if (updates.status !== undefined) slip.status = updates.status;
-  if (updates.paymentDate !== undefined) slip.paymentDate = updates.paymentDate;
   if (updates.paidVia !== undefined) slip.paidVia = updates.paidVia;
   if (updates.paymentReference !== undefined) slip.paymentReference = updates.paymentReference;
   if (updates.paidProofUrl !== undefined) slip.paidProofUrl = updates.paidProofUrl;
@@ -431,6 +498,7 @@ export const recordPaymentProof = async (
   if (data.paidVia) slip.paidVia = data.paidVia;
   if (data.paymentReference !== undefined) slip.paymentReference = data.paymentReference;
   slip.paymentDate = data.paymentDate ? new Date(data.paymentDate) : new Date();
+  slip.salaryReleaseDate = slip.paymentDate;
   if (data.paidProofUrl !== undefined) slip.paidProofUrl = data.paidProofUrl;
   if (data.paidProofName !== undefined) slip.paidProofName = data.paidProofName;
   if (data.notes !== undefined) slip.notes = data.notes;
@@ -513,11 +581,76 @@ export const getMyPayslips = async (
     totalTax: number;
     totalPf: number;
   };
+  packageInfo?: {
+    monthlySalary: number;
+    annualCtc: number;
+    previousSalary?: number;
+    previousAnnualCtc?: number;
+    incrementPercentage?: number;
+    incrementStatus?: string;
+    lastIncrementDate?: Date;
+    effectiveDate?: string;
+    latestReleaseDate?: Date;
+    latestPaidVia?: string;
+    latestPaymentRef?: string;
+    designation?: string;
+    employeeCode?: string;
+    employeeName?: string;
+    departmentName?: string;
+  };
 }> => {
   const employee = await ensureEmployeeForUser(userId);
   await seedSamplePayslipsIfEmpty(employee._id);
 
-  const slips = await SalarySlip.find({
+  let slips = await SalarySlip.find({
+    employeeId: employee._id,
+    year,
+  }).sort({ monthIndex: -1 });
+
+  // Ensure every slip has date-wise periods and release dates populated
+  for (const s of slips) {
+    let changed = false;
+    if (!s.payPeriodStartDate) {
+      s.payPeriodStartDate = new Date(s.year, s.monthIndex - 1, 1);
+      changed = true;
+    }
+    if (!s.payPeriodEndDate) {
+      s.payPeriodEndDate = new Date(s.year, s.monthIndex - 1, s.totalDaysInMonth || 30);
+      changed = true;
+    }
+    if (!s.salaryReleaseDate) {
+      s.salaryReleaseDate = s.paymentDate || new Date(s.year, s.monthIndex - 1, s.totalDaysInMonth || 30);
+      changed = true;
+    }
+    if (!s.packageAnnualCtc) {
+      s.packageAnnualCtc = (s.grossSalary || 50000) * 12;
+      changed = true;
+    }
+    if (changed) {
+      await s.save();
+    }
+  }
+
+  // If HR updated employee.monthlySalary, ensure the latest month slips match the updated salary!
+  if (employee.monthlySalary && employee.monthlySalary > 0) {
+    const latestMonthSlip = slips.find(s => s.monthIndex === 9);
+    if (latestMonthSlip && latestMonthSlip.grossSalary !== employee.monthlySalary) {
+      latestMonthSlip.grossSalary = employee.monthlySalary;
+      latestMonthSlip.basicSalary = Math.round(employee.monthlySalary * 0.5);
+      latestMonthSlip.hra = Math.round(employee.monthlySalary * 0.25);
+      latestMonthSlip.specialAllowance = Math.max(0, employee.monthlySalary - (latestMonthSlip.basicSalary + latestMonthSlip.hra));
+      const totalEarnings = latestMonthSlip.grossSalary + (latestMonthSlip.incentives || 0) + (latestMonthSlip.reimbursements || 0);
+      latestMonthSlip.netSalary = Math.max(0, totalEarnings - latestMonthSlip.totalDeductions);
+      latestMonthSlip.packageAnnualCtc = employee.monthlySalary * 12;
+      latestMonthSlip.previousSalary = employee.previousSalary || Math.round(employee.monthlySalary / 1.15);
+      latestMonthSlip.incrementPercentage = employee.incrementPercentage || 15;
+      latestMonthSlip.incrementStatus = employee.incrementStatus || "INCREMENT APPLIED";
+      await latestMonthSlip.save();
+    }
+  }
+
+  // Re-fetch sorted slips
+  slips = await SalarySlip.find({
     employeeId: employee._id,
     year,
   }).sort({ monthIndex: -1 });
@@ -528,6 +661,36 @@ export const getMyPayslips = async (
   const totalTax = slips.reduce((sum, s) => sum + s.taxDeduction, 0);
   const totalPf = slips.reduce((sum, s) => sum + s.pfDeduction, 0);
 
+  const currentMonthly = employee.monthlySalary || (slips[0]?.grossSalary) || 75000;
+  const prevSalary = employee.previousSalary && employee.previousSalary > 0 
+    ? employee.previousSalary 
+    : Math.round(currentMonthly / 1.15);
+  const incPct = employee.incrementPercentage !== undefined && employee.incrementPercentage > 0
+    ? employee.incrementPercentage
+    : Math.max(5, Math.round(((currentMonthly - prevSalary) / prevSalary) * 100));
+  const incStatus = employee.incrementStatus || "INCREMENT APPLIED";
+  const lastIncDate = employee.lastIncrementDate || new Date(year, 8, 1);
+
+  const latestPaidSlip = slips.find(s => s.status === "PAID" && (s.salaryReleaseDate || s.paymentDate)) || slips[0];
+  const latestReleaseDate = latestPaidSlip?.salaryReleaseDate || latestPaidSlip?.paymentDate || new Date(year, 8, 30);
+
+  const packageInfo = {
+    monthlySalary: currentMonthly,
+    annualCtc: currentMonthly * 12,
+    previousSalary: prevSalary,
+    previousAnnualCtc: prevSalary * 12,
+    incrementPercentage: incPct,
+    incrementStatus: incStatus,
+    lastIncrementDate: lastIncDate,
+    effectiveDate: "01 Sep 2026",
+    latestReleaseDate,
+    latestPaidVia: latestPaidSlip?.paidVia || "Direct Deposit (NEFT/RTGS)",
+    latestPaymentRef: latestPaidSlip?.paymentReference || "UTR202609894210",
+    designation: employee.designation || "Staff Member",
+    employeeCode: employee.employeeCode,
+    employeeName: `${employee.firstName} ${employee.lastName || ""}`.trim(),
+  };
+
   return {
     slips,
     summary: {
@@ -537,6 +700,7 @@ export const getMyPayslips = async (
       totalTax,
       totalPf,
     },
+    packageInfo,
   };
 };
 

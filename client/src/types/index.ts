@@ -389,9 +389,16 @@ export interface SalarySlip {
   // Net Pay
   netSalary: number;
 
-  // Metadata
+  // Metadata & Date-wise
   status: "PAID" | "PROCESSED" | "DRAFT" | "PENDING";
   paymentDate?: string;
+  salaryReleaseDate?: string;
+  payPeriodStartDate?: string;
+  payPeriodEndDate?: string;
+  packageAnnualCtc?: number;
+  previousSalary?: number;
+  incrementPercentage?: number;
+  incrementStatus?: string;
   bankAccountLast4?: string;
   panNumber?: string;
   uanNumber?: string;
@@ -415,6 +422,24 @@ export interface SalarySlip {
 
   createdAt: string;
   updatedAt: string;
+}
+
+export interface SalaryPackageInfo {
+  monthlySalary: number;
+  annualCtc: number;
+  previousSalary?: number;
+  previousAnnualCtc?: number;
+  incrementPercentage?: number;
+  incrementStatus?: string;
+  lastIncrementDate?: string;
+  effectiveDate?: string;
+  latestReleaseDate?: string;
+  latestPaidVia?: string;
+  latestPaymentRef?: string;
+  designation?: string;
+  employeeCode?: string;
+  employeeName?: string;
+  departmentName?: string;
 }
 
 export interface SalarySummary {

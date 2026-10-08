@@ -1,10 +1,10 @@
 import api from "./api";
-import type { ApiResponse, SalarySlip, SalarySummary } from "../types";
+import type { ApiResponse, SalarySlip, SalarySummary, SalaryPackageInfo } from "../types";
 
 export const getMyPayslips = async (
   year = 2026
-): Promise<ApiResponse<SalarySlip[]> & { summary?: SalarySummary }> => {
-  const res = await api.get<ApiResponse<SalarySlip[]> & { summary?: SalarySummary }>(
+): Promise<ApiResponse<SalarySlip[]> & { summary?: SalarySummary; packageInfo?: SalaryPackageInfo }> => {
+  const res = await api.get<ApiResponse<SalarySlip[]> & { summary?: SalarySummary; packageInfo?: SalaryPackageInfo }>(
     `/payroll/my-slips?year=${year}`
   );
   return res.data;

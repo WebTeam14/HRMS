@@ -12,9 +12,26 @@ import {
   CheckCircle2,
   HelpCircle,
   Send,
+  Calendar,
+  Clock,
 } from "lucide-react";
 import { getMyPayslips, raiseSalarySlipQuery, formatCurrency } from "../../services/payrollService";
-import type { SalarySlip, SalarySummary } from "../../types";
+import type { SalarySlip, SalarySummary, SalaryPackageInfo } from "../../types";
+
+const formatDate = (dateStr?: string | Date) => {
+  if (!dateStr) return "N/A";
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return String(dateStr);
+    return d.toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  } catch {
+    return String(dateStr);
+  }
+};
 
 const numberToWordsINR = (num: number): string => {
   const a = [
@@ -88,6 +105,7 @@ const numberToWordsINR = (num: number): string => {
 const MyPayslips = () => {
   const [slips, setSlips] = useState<SalarySlip[]>([]);
   const [summary, setSummary] = useState<SalarySummary | null>(null);
+  const [packageInfo, setPackageInfo] = useState<SalaryPackageInfo | null>(null);
   const [year, setYear] = useState<number>(2026);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -114,6 +132,7 @@ const MyPayslips = () => {
       const res = await getMyPayslips(year);
       setSlips(res.data);
       if (res.summary) setSummary(res.summary);
+      if (res.packageInfo) setPackageInfo(res.packageInfo);
     } catch (err: any) {
       setError(err?.response?.data?.message || "Failed to load salary slips");
     } finally {
@@ -182,6 +201,132 @@ const MyPayslips = () => {
         </div>
       </div>
 
+      {/* Employee Package & Increment Status Banner Card */}
+      {packageInfo && (
+        <div
+          style={{
+            background: "linear-gradient(135deg, #0f172a 0%, #1e293b 100%)",
+            borderRadius: "14px",
+            padding: "20px 24px",
+            color: "white",
+            marginBottom: "24px",
+            boxShadow: "0 10px 25px -5px rgba(15, 23, 42, 0.15)",
+            border: "1px solid #334155",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "16px" }}>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <span
+                  style={{
+                    background: "#22c55e",
+                    color: "#052e16",
+                    fontWeight: 800,
+                    fontSize: "11px",
+                    padding: "3px 9px",
+                    borderRadius: "6px",
+                    letterSpacing: "0.04em",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  ✓ {packageInfo.incrementStatus || "ACTIVE PACKAGE"}
+                </span>
+                <span style={{ color: "#94a3b8", fontSize: "12px" }}>
+                  Official Compensation Plan • FY {year}
+                </span>
+              </div>
+              <h2 style={{ margin: "8px 0 2px", fontSize: "22px", fontWeight: 800, color: "white" }}>
+                {packageInfo.employeeName} ({packageInfo.employeeCode})
+              </h2>
+              <p style={{ margin: 0, color: "#94a3b8", fontSize: "13px" }}>
+                {packageInfo.designation} • Department of {packageInfo.departmentName || "Technology"}
+              </p>
+            </div>
+
+            {/* Latest Salary Released Pill */}
+            <div
+              style={{
+                background: "rgba(255, 255, 255, 0.08)",
+                border: "1px solid rgba(255, 255, 255, 0.15)",
+                borderRadius: "10px",
+                padding: "10px 16px",
+                textAlign: "right",
+              }}
+            >
+              <div style={{ fontSize: "11px", color: "#94a3b8", fontWeight: 600, textTransform: "uppercase" }}>
+                LATEST SALARY RELEASE DATE
+              </div>
+              <strong style={{ fontSize: "14px", color: "#38bdf8", display: "flex", alignItems: "center", gap: "5px", justifyContent: "flex-end", marginTop: "2px" }}>
+                <Calendar size={14} />
+                {packageInfo.latestReleaseDate ? formatDate(packageInfo.latestReleaseDate) : "30 Sep 2026"}
+              </strong>
+              <small style={{ color: "#cbd5e1", fontSize: "11px", display: "block" }}>
+                Paid via {packageInfo.latestPaidVia || "Direct Deposit (NEFT/RTGS)"}
+              </small>
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+              gap: "16px",
+              marginTop: "20px",
+              paddingTop: "18px",
+              borderTop: "1px solid rgba(255, 255, 255, 0.12)",
+            }}
+          >
+            <div style={{ background: "rgba(255, 255, 255, 0.05)", borderRadius: "8px", padding: "12px 16px" }}>
+              <span style={{ fontSize: "11px", color: "#94a3b8", textTransform: "uppercase", fontWeight: 600 }}>
+                ANNUAL PACKAGE (CTC)
+              </span>
+              <div style={{ fontSize: "20px", fontWeight: 800, color: "#4ade80", marginTop: "2px" }}>
+                {formatCurrency(packageInfo.annualCtc)}
+              </div>
+              <small style={{ color: "#94a3b8", fontSize: "11px" }}>
+                {(packageInfo.annualCtc / 100000).toFixed(2)} LPA CTC
+              </small>
+            </div>
+
+            <div style={{ background: "rgba(255, 255, 255, 0.05)", borderRadius: "8px", padding: "12px 16px" }}>
+              <span style={{ fontSize: "11px", color: "#94a3b8", textTransform: "uppercase", fontWeight: 600 }}>
+                MONTHLY BASE PACKAGE
+              </span>
+              <div style={{ fontSize: "20px", fontWeight: 800, color: "white", marginTop: "2px" }}>
+                {formatCurrency(packageInfo.monthlySalary)}
+              </div>
+              <small style={{ color: "#94a3b8", fontSize: "11px" }}>
+                Per month before additions
+              </small>
+            </div>
+
+            <div style={{ background: "rgba(255, 255, 255, 0.05)", borderRadius: "8px", padding: "12px 16px" }}>
+              <span style={{ fontSize: "11px", color: "#94a3b8", textTransform: "uppercase", fontWeight: 600 }}>
+                APPRAISAL & INCREMENT HIKE
+              </span>
+              <div style={{ fontSize: "20px", fontWeight: 800, color: "#38bdf8", marginTop: "2px" }}>
+                +{packageInfo.incrementPercentage || 0}% Hike
+              </div>
+              <small style={{ color: "#94a3b8", fontSize: "11px" }}>
+                Prev: {formatCurrency(packageInfo.previousSalary || 0)} / mo
+              </small>
+            </div>
+
+            <div style={{ background: "rgba(255, 255, 255, 0.05)", borderRadius: "8px", padding: "12px 16px" }}>
+              <span style={{ fontSize: "11px", color: "#94a3b8", textTransform: "uppercase", fontWeight: 600 }}>
+                INCREMENT EFFECTIVE DATE
+              </span>
+              <div style={{ fontSize: "16px", fontWeight: 700, color: "white", marginTop: "4px" }}>
+                {packageInfo.effectiveDate || "01 Sep 2026"}
+              </div>
+              <small style={{ color: "#22c55e", fontSize: "11px", fontWeight: 600 }}>
+                Active in Current Payroll Cycle
+              </small>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Annual Summary KPI Cards */}
       {summary && (
         <div className="dashboard-cards" style={{ marginBottom: "24px" }}>
@@ -243,9 +388,9 @@ const MyPayslips = () => {
           }}
         >
           <div>
-            <h2 style={{ margin: 0, fontSize: "16px", color: "#0f172a" }}>Monthly Salary Statements</h2>
+            <h2 style={{ margin: 0, fontSize: "16px", color: "#0f172a" }}>Monthly Salary Statements (Date-Wise)</h2>
             <p style={{ margin: "2px 0 0", color: "#64748b", fontSize: "13px" }}>
-              Official softcopy compensation breakdown for financial year {year}
+              Official softcopy compensation breakdown with explicit salary released dates for financial year {year}
             </p>
           </div>
 
@@ -280,8 +425,9 @@ const MyPayslips = () => {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Month & Year</th>
-                  <th>Present / Paid Days</th>
+                  <th>Month & Pay Period (Date-Wise)</th>
+                  <th>Salary Released Date</th>
+                  <th>Present / Paid</th>
                   <th>Late Marks</th>
                   <th>Gross Salary</th>
                   <th>Deductions</th>
@@ -295,9 +441,24 @@ const MyPayslips = () => {
                 {slips.map((slip: SalarySlip) => (
                   <tr key={slip._id}>
                     <td>
-                      <strong style={{ color: "#0f172a", fontSize: "14px" }}>
+                      <strong style={{ color: "#0f172a", fontSize: "14px", display: "block" }}>
                         {slip.month} {slip.year}
                       </strong>
+                      <small style={{ color: "#64748b", fontSize: "11px", display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                        <Clock size={11} />
+                        {slip.payPeriodStartDate ? formatDate(slip.payPeriodStartDate) : `01 ${slip.month.slice(0, 3)} ${slip.year}`} – {slip.payPeriodEndDate ? formatDate(slip.payPeriodEndDate) : `${slip.totalDaysInMonth || 30} ${slip.month.slice(0, 3)} ${slip.year}`}
+                      </small>
+                    </td>
+                    <td>
+                      <div>
+                        <strong style={{ color: slip.status === "PAID" ? "#059669" : "#0f172a", fontSize: "13px", display: "flex", alignItems: "center", gap: "4px" }}>
+                          <Calendar size={13} color={slip.status === "PAID" ? "#059669" : "#64748b"} />
+                          {slip.salaryReleaseDate || slip.paymentDate ? formatDate(slip.salaryReleaseDate || slip.paymentDate) : `${slip.totalDaysInMonth || 30} ${slip.month.slice(0, 3)} ${slip.year}`}
+                        </strong>
+                        <span style={{ fontSize: "11px", color: slip.status === "PAID" ? "#16a34a" : "#d97706", fontWeight: 600 }}>
+                          {slip.status === "PAID" ? "✓ Released" : "⏳ Scheduled"}
+                        </span>
+                      </div>
                     </td>
                     <td>
                       <span style={{ fontSize: "12px", color: "#334155" }}>
@@ -316,12 +477,21 @@ const MyPayslips = () => {
                       </span>
                     </td>
                     <td>
-                      <strong style={{ color: "#0f172a" }}>
+                      <strong style={{ color: "#0f172a", fontSize: "13px", display: "block" }}>
                         {formatCurrency(slip.grossSalary - (slip.lopDeduction || 0))}
                       </strong>
+                      {slip.incrementPercentage ? (
+                        <span style={{ display: "inline-block", fontSize: "10px", fontWeight: 700, padding: "1px 5px", background: "#ecfdf5", color: "#059669", border: "1px solid #a7f3d0", borderRadius: "3px" }}>
+                          +{slip.incrementPercentage}% Incr
+                        </span>
+                      ) : (
+                        <small style={{ color: "#64748b", fontSize: "11px" }}>Base: {formatCurrency(slip.grossSalary)}</small>
+                      )}
                     </td>
-                    <td style={{ color: "#dc2626" }}>
-                      −{formatCurrency(slip.totalDeductions)}
+                    <td>
+                      <div style={{ fontSize: "12px", color: slip.totalDeductions > 0 ? "#dc2626" : "#64748b" }}>
+                        <span>{slip.totalDeductions > 0 ? `−${formatCurrency(slip.totalDeductions)}` : "₹0 (No Deductions)"}</span>
+                      </div>
                     </td>
                     <td>
                       <strong style={{ color: "#059669", fontSize: "14px" }}>
@@ -549,7 +719,6 @@ const MyPayslips = () => {
                 const empCode = emp?.employeeCode || "EMP-1005";
                 const designation = emp?.designation || "Staff";
                 const department = emp?.departmentId?.name || "General";
-                const email = emp?.userId?.email || "employee@hrms-demo.com";
 
                 return (
                   <div
@@ -578,28 +747,44 @@ const MyPayslips = () => {
                         <span style={{ color: "#64748b" }}>Designation:</span>
                         <strong>{designation}</strong>
                       </div>
-                      <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
                         <span style={{ color: "#64748b" }}>Department:</span>
                         <strong>{department}</strong>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between" }}>
+                        <span style={{ color: "#64748b" }}>Pay Period (Date-Wise):</span>
+                        <strong style={{ color: "#2563eb" }}>
+                          {selectedSlip.payPeriodStartDate ? formatDate(selectedSlip.payPeriodStartDate) : `01 ${selectedSlip.month.slice(0, 3)} ${selectedSlip.year}`} to {selectedSlip.payPeriodEndDate ? formatDate(selectedSlip.payPeriodEndDate) : `${selectedSlip.totalDaysInMonth || 30} ${selectedSlip.month.slice(0, 3)} ${selectedSlip.year}`}
+                        </strong>
                       </div>
                     </div>
 
                     <div style={{ borderLeft: "1px solid #e2e8f0", paddingLeft: "16px" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                        <span style={{ color: "#64748b" }}>Salary Released Date:</span>
+                        <strong style={{ color: "#059669" }}>
+                          {selectedSlip.salaryReleaseDate || selectedSlip.paymentDate ? formatDate(selectedSlip.salaryReleaseDate || selectedSlip.paymentDate) : `${selectedSlip.totalDaysInMonth || 30} ${selectedSlip.month.slice(0, 3)} ${selectedSlip.year}`}
+                        </strong>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                        <span style={{ color: "#64748b" }}>Annual Package (CTC):</span>
+                        <strong style={{ color: "#0f172a" }}>
+                          {formatCurrency((selectedSlip.grossSalary || 50000) * 12)} ({(((selectedSlip.grossSalary || 50000) * 12) / 100000).toFixed(2)} LPA)
+                        </strong>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                        <span style={{ color: "#64748b" }}>Appraisal / Increment:</span>
+                        <strong style={{ color: "#059669" }}>
+                          {selectedSlip.incrementStatus || "INCREMENT APPLIED"} {selectedSlip.incrementPercentage ? `(+${selectedSlip.incrementPercentage}%)` : ""}
+                        </strong>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
                         <span style={{ color: "#64748b" }}>Bank Account:</span>
                         <strong>HDFC Bank (•••• {selectedSlip.bankAccountLast4 || "8942"})</strong>
                       </div>
-                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-                        <span style={{ color: "#64748b" }}>PAN Number:</span>
-                        <strong>{selectedSlip.panNumber || "ABCDE1234F"}</strong>
-                      </div>
-                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-                        <span style={{ color: "#64748b" }}>UAN Number:</span>
-                        <strong>{selectedSlip.uanNumber || "100984729104"}</strong>
-                      </div>
                       <div style={{ display: "flex", justifyContent: "space-between" }}>
-                        <span style={{ color: "#64748b" }}>Email ID:</span>
-                        <strong>{email}</strong>
+                        <span style={{ color: "#64748b" }}>PAN & UAN:</span>
+                        <strong>{selectedSlip.panNumber || "ABCDE1234F"} • {selectedSlip.uanNumber || "100984729104"}</strong>
                       </div>
                     </div>
                   </div>

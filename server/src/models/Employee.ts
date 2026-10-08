@@ -28,6 +28,11 @@ export interface IEmployee extends Document {
 
   workLocation?: string;
   monthlySalary?: number;
+  previousSalary?: number;
+  lastIncrementDate?: Date;
+  incrementPercentage?: number;
+  incrementStatus?: string;
+  annualCtc?: number;
 
   status:
     | "ACTIVE"
@@ -120,6 +125,30 @@ const employeeSchema = new Schema<IEmployee>(
     monthlySalary: {
       type: Number,
       default: 50000,
+    },
+
+    previousSalary: {
+      type: Number,
+      default: 0,
+    },
+
+    lastIncrementDate: {
+      type: Date,
+    },
+
+    incrementPercentage: {
+      type: Number,
+      default: 0,
+    },
+
+    incrementStatus: {
+      type: String,
+      default: "ACTIVE PACKAGE",
+    },
+
+    annualCtc: {
+      type: Number,
+      default: 600000,
     },
 
     status: {

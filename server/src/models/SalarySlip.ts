@@ -37,6 +37,13 @@ export interface ISalarySlip extends Document {
   // Status & Metadata
   status: "PAID" | "PROCESSED" | "DRAFT" | "PENDING";
   paymentDate?: Date;
+  salaryReleaseDate?: Date;
+  payPeriodStartDate?: Date;
+  payPeriodEndDate?: Date;
+  packageAnnualCtc?: number;
+  previousSalary?: number;
+  incrementPercentage?: number;
+  incrementStatus?: string;
   bankAccountLast4?: string;
   panNumber?: string;
   uanNumber?: string;
@@ -192,6 +199,31 @@ const salarySlipSchema = new Schema<ISalarySlip>(
     },
     paymentDate: {
       type: Date,
+    },
+    salaryReleaseDate: {
+      type: Date,
+    },
+    payPeriodStartDate: {
+      type: Date,
+    },
+    payPeriodEndDate: {
+      type: Date,
+    },
+    packageAnnualCtc: {
+      type: Number,
+      default: 0,
+    },
+    previousSalary: {
+      type: Number,
+      default: 0,
+    },
+    incrementPercentage: {
+      type: Number,
+      default: 0,
+    },
+    incrementStatus: {
+      type: String,
+      default: "ACTIVE PACKAGE",
     },
     bankAccountLast4: {
       type: String,

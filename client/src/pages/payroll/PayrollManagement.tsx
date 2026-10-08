@@ -46,6 +46,21 @@ const MONTHS = [
   { index: 12, name: "December" },
 ];
 
+const formatDate = (dateStr?: string | Date) => {
+  if (!dateStr) return "N/A";
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return String(dateStr);
+    return d.toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  } catch {
+    return String(dateStr);
+  }
+};
+
 const numberToWordsINR = (num: number): string => {
   const a = [
     "",
@@ -631,7 +646,7 @@ const PayrollManagement = () => {
               Payroll Register & Salary Sheet — {monthName} {year}
             </h2>
             <p style={{ margin: "2px 0 0", color: "#64748b", fontSize: "13px" }}>
-              Itemized statement of packages, days worked, deductions, and net take-home
+              Pay Period: 01 {monthName.slice(0, 3)} {year} – {new Date(year, monthIndex, 0).getDate()} {monthName.slice(0, 3)} {year} • Itemized statement of packages, days worked, deductions, and release dates
             </p>
           </div>
 
@@ -712,7 +727,7 @@ const PayrollManagement = () => {
                 <tr>
                   <th>Employee</th>
                   <th>Department & Role</th>
-                  <th>Base Gross</th>
+                  <th>Package & Base Gross</th>
                   <th>Present / Paid</th>
                   <th>Late Marks</th>
                   <th>LOP Days</th>
@@ -720,7 +735,7 @@ const PayrollManagement = () => {
                   <th>Gross Earned</th>
                   <th>Deductions</th>
                   <th>Net Take-Home</th>
-                  <th>Status & Payment</th>
+                  <th>Status & Release Date</th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -752,9 +767,17 @@ const PayrollManagement = () => {
                         </div>
                       </td>
                       <td>
-                        <strong style={{ color: "#0f172a", fontSize: "13px" }}>
+                        <strong style={{ color: "#0f172a", fontSize: "13px", display: "block" }}>
                           {formatCurrency(s.grossSalary)}
                         </strong>
+                        <div style={{ fontSize: "11px", color: "#64748b" }}>
+                          {s.packageAnnualCtc ? `${(s.packageAnnualCtc / 100000).toFixed(2)} LPA CTC` : `${((s.grossSalary * 12) / 100000).toFixed(2)} LPA CTC`}
+                        </div>
+                        {s.incrementPercentage ? (
+                          <span style={{ display: "inline-block", fontSize: "10px", fontWeight: 700, padding: "1px 5px", background: "#ecfdf5", color: "#059669", border: "1px solid #a7f3d0", borderRadius: "3px", marginTop: "2px" }}>
+                            +{s.incrementPercentage}% Hike
+                          </span>
+                        ) : null}
                       </td>
                       <td>
                         <div style={{ fontSize: "12px", color: "#334155" }}>
@@ -826,8 +849,12 @@ const PayrollManagement = () => {
                           >
                             {s.status}
                           </span>
+                          <div style={{ marginTop: "4px", fontSize: "11px", color: s.status === "PAID" ? "#059669" : "#64748b", fontWeight: 600 }}>
+                            <Calendar size={11} style={{ display: "inline", verticalAlign: "middle", marginRight: "3px" }} />
+                            {s.salaryReleaseDate || s.paymentDate ? formatDate(s.salaryReleaseDate || s.paymentDate) : `${s.totalDaysInMonth || 30} ${s.month.slice(0, 3)} ${s.year}`}
+                          </div>
                           {s.status === "PAID" && (
-                            <div style={{ marginTop: "4px", fontSize: "11px", color: "#64748b" }}>
+                            <div style={{ marginTop: "2px", fontSize: "11px", color: "#64748b" }}>
                               <span style={{ display: "block", color: "#0f172a", fontWeight: 600 }}>
                                 {s.paidVia || "Bank Transfer"}
                               </span>
@@ -1079,6 +1106,18 @@ const PayrollManagement = () => {
                 <div style={{ marginTop: "12px", display: "inline-block", padding: "4px 18px", borderRadius: "4px", background: "#0f172a", color: "white", fontSize: "12px", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase" }}>
                   PAYSLIP FOR THE MONTH OF {selectedSlip.month.toUpperCase()} {selectedSlip.year}
                 </div>
+                <div style={{ marginTop: "6px", fontSize: "11px", color: "#475569", display: "flex", justifyContent: "center", gap: "16px", flexWrap: "wrap" }}>
+                  <span>
+                    <strong>Pay Period (Date-Wise):</strong>{" "}
+                    {selectedSlip.payPeriodStartDate ? formatDate(selectedSlip.payPeriodStartDate) : `01 ${selectedSlip.month.slice(0, 3)} ${selectedSlip.year}`} –{" "}
+                    {selectedSlip.payPeriodEndDate ? formatDate(selectedSlip.payPeriodEndDate) : `${selectedSlip.totalDaysInMonth || 30} ${selectedSlip.month.slice(0, 3)} ${selectedSlip.year}`}
+                  </span>
+                  <span>•</span>
+                  <span>
+                    <strong>Salary Released Date:</strong>{" "}
+                    {selectedSlip.salaryReleaseDate || selectedSlip.paymentDate ? formatDate(selectedSlip.salaryReleaseDate || selectedSlip.paymentDate) : `${selectedSlip.totalDaysInMonth || 30} ${selectedSlip.month.slice(0, 3)} ${selectedSlip.year}`}
+                  </span>
+                </div>
               </div>
 
               {/* Employee & Bank Info Grid */}
@@ -1117,9 +1156,15 @@ const PayrollManagement = () => {
                         <span style={{ color: "#64748b" }}>Designation:</span>
                         <strong>{designation}</strong>
                       </div>
-                      <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
                         <span style={{ color: "#64748b" }}>Department:</span>
                         <strong>{department}</strong>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between" }}>
+                        <span style={{ color: "#64748b" }}>Annual Package (CTC):</span>
+                        <strong style={{ color: "#2563eb" }}>
+                          {formatCurrency(selectedSlip.packageAnnualCtc || selectedSlip.grossSalary * 12)} ({((selectedSlip.packageAnnualCtc || selectedSlip.grossSalary * 12) / 100000).toFixed(2)} LPA)
+                        </strong>
                       </div>
                     </div>
 
@@ -1136,9 +1181,15 @@ const PayrollManagement = () => {
                         <span style={{ color: "#64748b" }}>UAN Number:</span>
                         <strong>{selectedSlip.uanNumber || "100984729104"}</strong>
                       </div>
-                      <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
                         <span style={{ color: "#64748b" }}>Email ID:</span>
                         <strong>{email}</strong>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between" }}>
+                        <span style={{ color: "#64748b" }}>Increment Status:</span>
+                        <span style={{ fontWeight: 700, color: (selectedSlip.incrementPercentage || 0) > 0 ? "#059669" : "#334155" }}>
+                          {selectedSlip.incrementStatus || "ACTIVE PACKAGE"} {selectedSlip.incrementPercentage ? `(+${selectedSlip.incrementPercentage}%)` : ""}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -1488,6 +1539,55 @@ const PayrollManagement = () => {
                     >
                       Clear Deductions to ₹0
                     </button>
+                  </div>
+
+                  {/* Current Package & Increment status preview */}
+                  <div
+                    style={{
+                      background: "#f8fafc",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: "8px",
+                      padding: "12px 14px",
+                      marginBottom: "16px",
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
+                      gap: "10px",
+                    }}
+                  >
+                    <div>
+                      <span style={{ fontSize: "11px", color: "#64748b", display: "block" }}>Annual CTC Package</span>
+                      <strong style={{ fontSize: "13px", color: "#0f172a" }}>
+                        {formatCurrency(previewBase * 12)}
+                      </strong>
+                      <small style={{ color: "#2563eb", fontWeight: 600, display: "block" }}>
+                        {((previewBase * 12) / 100000).toFixed(2)} LPA
+                      </small>
+                    </div>
+
+                    <div>
+                      <span style={{ fontSize: "11px", color: "#64748b", display: "block" }}>Pay Period (Date-Wise)</span>
+                      <strong style={{ fontSize: "12px", color: "#0f172a" }}>
+                        01 {editingSlip.month.slice(0, 3)} – {editingSlip.totalDaysInMonth || 30} {editingSlip.month.slice(0, 3)} {editingSlip.year}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span style={{ fontSize: "11px", color: "#64748b", display: "block" }}>Salary Released Date</span>
+                      <strong style={{ fontSize: "12px", color: "#0f172a" }}>
+                        {editingSlip.salaryReleaseDate ? formatDate(editingSlip.salaryReleaseDate) : `${editingSlip.totalDaysInMonth || 30} ${editingSlip.month.slice(0, 3)} ${editingSlip.year}`}
+                      </strong>
+                    </div>
+
+                    {editingSlip.previousSalary && editingSlip.previousSalary > 0 && previewBase !== editingSlip.previousSalary && (
+                      <div style={{ background: previewBase > editingSlip.previousSalary ? "#ecfdf5" : "#fef2f2", border: `1px solid ${previewBase > editingSlip.previousSalary ? "#a7f3d0" : "#fecaca"}`, padding: "6px 8px", borderRadius: "6px" }}>
+                        <span style={{ fontSize: "10px", color: previewBase > editingSlip.previousSalary ? "#059669" : "#dc2626", fontWeight: 700, display: "block" }}>
+                          {previewBase > editingSlip.previousSalary ? "📈 Increment Hike" : "Revised"}
+                        </span>
+                        <strong style={{ fontSize: "12px", color: previewBase > editingSlip.previousSalary ? "#059669" : "#dc2626" }}>
+                          {previewBase > editingSlip.previousSalary ? "+" : ""}{Math.round(((previewBase - editingSlip.previousSalary) / editingSlip.previousSalary) * 100)}%
+                        </strong>
+                      </div>
+                    )}
                   </div>
 
                   <div style={{ marginBottom: "16px" }}>
