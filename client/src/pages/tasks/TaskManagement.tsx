@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Plus, AlertTriangle, Clock, CheckCircle2, ListTodo,
   Trash2, Edit2, X, Calendar, Zap,
@@ -25,6 +26,7 @@ const STATUS_COLUMNS: { key: TaskStatus; label: string; icon: any; color: string
 ];
 
 const TaskManagement = () => {
+  const navigate = useNavigate();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [stats, setStats] = useState<TaskStats>({ total: 0, completed: 0, overdue: 0, inProgress: 0, todo: 0 });
   const [members, setMembers] = useState<TaskEmployee[]>([]);
@@ -73,11 +75,14 @@ const TaskManagement = () => {
 
   useEffect(() => { load(); }, [filterStatus, filterPriority, filterAssignee]);
 
-  const filtered = tasks.filter((t) =>
-    !search ||
-    t.title.toLowerCase().includes(search.toLowerCase()) ||
-    `${t.employeeId.firstName} ${t.employeeId.lastName}`.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = tasks.filter((t) => {
+    if (!t) return false;
+    const titleMatch = t.title ? t.title.toLowerCase().includes(search.toLowerCase()) : false;
+    const fName = t.employeeId?.firstName || "";
+    const lName = t.employeeId?.lastName || "";
+    const nameMatch = `${fName} ${lName}`.trim().toLowerCase().includes(search.toLowerCase());
+    return !search || titleMatch || nameMatch;
+  });
 
   const byStatus = (s: TaskStatus) => filtered.filter((t) => t.status === s);
 
@@ -128,10 +133,10 @@ const TaskManagement = () => {
   const openEdit = (task: Task) => {
     setEditTask(task);
     setForm({
-      title: task.title,
+      title: task.title || "",
       description: task.description || "",
-      assigneeId: task.employeeId._id,
-      priority: task.priority,
+      assigneeId: task.employeeId?._id || "",
+      priority: task.priority || "MEDIUM",
       dueDate: task.dueDate ? task.dueDate.substring(0, 10) : "",
       estimatedHours: task.estimatedHours ? String(task.estimatedHours) : "",
     });
@@ -158,13 +163,30 @@ const TaskManagement = () => {
           <h1>Team Task Board</h1>
           <p>Assign and track tasks across your team in real time</p>
         </div>
-        <button
-          className="primary-button"
-          onClick={() => { resetForm(); setEditTask(null); setShowAssignModal(true); }}
-          style={{ display: "flex", alignItems: "center", gap: "6px" }}
-        >
-          <Plus size={16} /> Assign Task
-        </button>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => navigate("/my-tasks")}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              background: "#ffffff",
+              border: "1px solid #cbd5e1",
+              fontWeight: 600,
+            }}
+          >
+            <ListTodo size={15} /> My Assigned Tasks
+          </button>
+          <button
+            className="primary-button"
+            onClick={() => { resetForm(); setEditTask(null); setShowAssignModal(true); }}
+            style={{ display: "flex", alignItems: "center", gap: "6px" }}
+          >
+            <Plus size={16} /> Assign Task
+          </button>
+        </div>
       </div>
 
       {/* Alert Banner */}
@@ -308,9 +330,11 @@ const TaskManagement = () => {
                       No tasks
                     </div>
                   ) : colTasks.map((task) => {
-                    const pm = PRIORITY_META[task.priority];
+                    const pm = (task.priority && PRIORITY_META[task.priority]) || PRIORITY_META.MEDIUM;
                     const assignee = task.employeeId;
-                    const initial = assignee.firstName.charAt(0).toUpperCase();
+                    const firstName = assignee?.firstName || "Unassigned";
+                    const lastName = assignee?.lastName || "";
+                    const initial = firstName.charAt(0).toUpperCase() || "?";
                     const overdue = isOverdue(task);
                     const dueToday = isDueToday(task);
 
@@ -371,7 +395,7 @@ const TaskManagement = () => {
                             display: "flex", alignItems: "center", justifyContent: "center",
                           }}>{initial}</div>
                           <span style={{ fontSize: "12px", color: "#334155", fontWeight: 500 }}>
-                            {assignee.firstName} {assignee.lastName || ""}
+                            {firstName} {lastName}
                           </span>
                         </div>
 

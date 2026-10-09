@@ -72,7 +72,7 @@ export const designationListQuerySchema = z.object({
     .number()
     .int()
     .min(1)
-    .max(100)
+    .max(500)
     .default(10),
   sortBy: z
     .enum(["name", "code", "createdAt"])

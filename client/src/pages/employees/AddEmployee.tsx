@@ -24,11 +24,7 @@ import {
   getDepartments,
   type Department,
 } from "../../services/departmentService";
-
-import {
-  getDesignations,
-  type Designation,
-} from "../../services/designationService";
+import { DesignationInput } from "../../components/common/DesignationInput";
 
 const AddEmployee = () => {
   const navigate = useNavigate();
@@ -38,8 +34,6 @@ const AddEmployee = () => {
 
   const [departments, setDepartments] = useState<Department[]>([]);
   const [managers, setManagers] = useState<Employee[]>([]);
-  const [designations, setDesignations] = useState<Designation[]>([]);
-  const [loadingDesignations, setLoadingDesignations] = useState(false);
 
   const [form, setForm] = useState({
     email: "",
@@ -81,35 +75,14 @@ const AddEmployee = () => {
     }
   };
 
-  const handleDepartmentChange = async (
+  const handleDepartmentChange = (
     e: React.ChangeEvent<HTMLSelectElement>
   ) => {
     const selectedDeptId = e.target.value;
     setForm((prev) => ({
       ...prev,
       departmentId: selectedDeptId,
-      designation: "", // reset designation when department changes
     }));
-
-    if (!selectedDeptId) {
-      setDesignations([]);
-      return;
-    }
-
-    try {
-      setLoadingDesignations(true);
-      const res = await getDesignations({
-        departmentId: selectedDeptId,
-        status: "ACTIVE",
-        limit: 100,
-      });
-      setDesignations(res.data);
-    } catch (err) {
-      console.error("Failed to load designations for department:", err);
-      setDesignations([]);
-    } finally {
-      setLoadingDesignations(false);
-    }
   };
 
   const handleChange = (
@@ -203,8 +176,14 @@ const AddEmployee = () => {
     } catch (error: any) {
       console.error("Failed to create employee:", error);
 
+      const details = error?.response?.data?.details;
+      const detailMsg =
+        Array.isArray(details) && details.length > 0
+          ? details.map((d: any) => `${d.field}: ${d.message}`).join(" | ")
+          : "";
       setError(
-        error?.response?.data?.message ||
+        detailMsg ||
+          error?.response?.data?.message ||
           "Unable to create employee. Please try again."
       );
     } finally {
@@ -417,37 +396,16 @@ const AddEmployee = () => {
               </select>
             </div>
 
-            {/* Dynamic Designation Dropdown */}
+            {/* Dynamic Designation Dropdown / Manual Input */}
             <div className="form-field">
               <label>Designation</label>
-
-              {!form.departmentId ? (
-                <select disabled>
-                  <option value="">Select department first</option>
-                </select>
-              ) : loadingDesignations ? (
-                <select disabled>
-                  <option value="">Loading designations...</option>
-                </select>
-              ) : designations.length === 0 ? (
-                <select disabled>
-                  <option value="">No designations available</option>
-                </select>
-              ) : (
-                <select
-                  name="designation"
-                  value={form.designation}
-                  onChange={handleChange}
-                >
-                  <option value="">Select designation</option>
-                  {designations.map((desig) => (
-                    <option key={desig._id} value={desig.name}>
-                      {desig.name}
-                      {desig.code ? ` (${desig.code})` : ""}
-                    </option>
-                  ))}
-                </select>
-              )}
+              <DesignationInput
+                value={form.designation}
+                onChange={(val) =>
+                  setForm((prev) => ({ ...prev, designation: val }))
+                }
+                departmentId={form.departmentId}
+              />
             </div>
 
             <div className="form-field">

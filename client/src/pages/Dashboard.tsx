@@ -273,7 +273,7 @@ const Dashboard = () => {
       </div>
 
       {/* MNC-Style Task Alert Strip */}
-      {taskAlerts && (taskAlerts.myOverdue > 0 || taskAlerts.teamOverdue > 0 || taskAlerts.myPending > 0) && (
+      {taskAlerts && (taskAlerts.myOverdue > 0 || taskAlerts.teamOverdue > 0 || taskAlerts.myPending > 0 || (isManagement && taskAlerts.teamPending > 0)) && (
         <div
           style={{
             marginBottom: "20px",
@@ -926,6 +926,21 @@ const Dashboard = () => {
                 </div>
                 <ArrowRight size={18} />
               </button>
+
+              <button
+                type="button"
+                className="quick-action-card"
+                onClick={() => navigate("/tasks/management")}
+              >
+                <div className="quick-action-icon" style={{ background: "#eef2ff", color: "#4f46e5" }}>
+                  <ClipboardList size={20} />
+                </div>
+                <div className="quick-action-content">
+                  <strong>Task Board</strong>
+                  <span>Assign, track & review team tasks</span>
+                </div>
+                <ArrowRight size={18} />
+              </button>
             </>
           )}
 
@@ -988,6 +1003,21 @@ const Dashboard = () => {
                 <div className="quick-action-content">
                   <strong>Support Helpdesk</strong>
                   <span>Track & resolve team requests</span>
+                </div>
+                <ArrowRight size={18} />
+              </button>
+
+              <button
+                type="button"
+                className="quick-action-card"
+                onClick={() => navigate("/tasks/management")}
+              >
+                <div className="quick-action-icon" style={{ background: "#eef2ff", color: "#4f46e5" }}>
+                  <ClipboardList size={20} />
+                </div>
+                <div className="quick-action-content">
+                  <strong>Team Task Board</strong>
+                  <span>Assign and monitor tasks</span>
                 </div>
                 <ArrowRight size={18} />
               </button>

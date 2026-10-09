@@ -82,7 +82,22 @@ export const getMyTasks = async (
 
     await markOverdueTasks();
 
-    const employee = await ensureEmployeeForUser(userId);
+    let employee: any = null;
+    try {
+      employee = await ensureEmployeeForUser(userId);
+    } catch (e) {
+      // fallback
+    }
+
+    if (!employee) {
+      res.status(200).json({
+        success: true,
+        data: [],
+        stats: { total: 0, completed: 0, overdue: 0, inProgress: 0, todo: 0 },
+      });
+      return;
+    }
+
     const { status, priority } = req.query as any;
 
     const filter: any = { employeeId: employee._id };
@@ -124,25 +139,41 @@ export const getTeamTasks = async (
 
     await markOverdueTasks();
 
-    const manager = await ensureEmployeeForUser(userId);
-    const { status, priority, assigneeId } = req.query as any;
-
-    // Build filter: tasks assigned by this manager, or if CEO/HR/Admin, all tasks
     const role = req.user?.role;
     const isTopLevel = role === "CEO" || role === "ADMIN" || role === "HR";
 
+    let manager: any = null;
+    try {
+      manager = await ensureEmployeeForUser(userId);
+    } catch (e) {
+      // safe fallback if top level
+    }
+
+    if (!isTopLevel && !manager) {
+      res.status(200).json({
+        success: true,
+        data: [],
+        stats: { total: 0, completed: 0, overdue: 0, inProgress: 0, todo: 0 },
+      });
+      return;
+    }
+
+    const { status, priority, assigneeId } = req.query as any;
+
     const filter: any = {};
-    if (!isTopLevel) {
+    if (!isTopLevel && manager) {
       filter.assignedById = manager._id;
     }
     if (status) filter.status = status;
     if (priority) filter.priority = priority;
     if (assigneeId) filter.employeeId = assigneeId;
 
-    const tasks = await WorkTask.find(filter)
+    const rawTasks = await WorkTask.find(filter)
       .populate("employeeId", "firstName lastName employeeCode designation departmentId")
       .populate("assignedById", "firstName lastName designation")
       .sort({ dueDate: 1, createdAt: -1 });
+
+    const tasks = rawTasks.filter((t) => Boolean(t.employeeId));
 
     const total = tasks.length;
     const completed = tasks.filter((t) => t.status === "COMPLETED").length;
@@ -269,7 +300,11 @@ export const getTaskAlerts = async (
 
     await markOverdueTasks();
 
-    const employee = await ensureEmployeeForUser(userId);
+    let employee: any = null;
+    try {
+      employee = await ensureEmployeeForUser(userId);
+    } catch (e) {}
+
     const role = req.user?.role;
     const isManager = role === "CEO" || role === "ADMIN" || role === "HR" || role === "MANAGER";
 
@@ -278,20 +313,20 @@ export const getTaskAlerts = async (
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
 
-    let myFilter: any = { employeeId: employee._id };
+    let myFilter: any = employee ? { employeeId: employee._id } : null;
     let teamFilter: any = isManager
       ? (role === "CEO" || role === "ADMIN" || role === "HR"
           ? {}
-          : { assignedById: employee._id })
+          : (employee ? { assignedById: employee._id } : null))
       : null;
 
-    const myOverdue = await WorkTask.countDocuments({ ...myFilter, status: "OVERDUE" });
-    const myPending = await WorkTask.countDocuments({ ...myFilter, status: { $in: ["TODO", "IN_PROGRESS"] } });
-    const myDueToday = await WorkTask.countDocuments({
+    const myOverdue = myFilter ? await WorkTask.countDocuments({ ...myFilter, status: "OVERDUE" }) : 0;
+    const myPending = myFilter ? await WorkTask.countDocuments({ ...myFilter, status: { $in: ["TODO", "IN_PROGRESS"] } }) : 0;
+    const myDueToday = myFilter ? await WorkTask.countDocuments({
       ...myFilter,
       status: { $in: ["TODO", "IN_PROGRESS"] },
       dueDate: { $gte: todayStart, $lte: today },
-    });
+    }) : 0;
 
     let teamOverdue = 0;
     let teamPending = 0;

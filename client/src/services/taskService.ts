@@ -22,8 +22,8 @@ export interface Task {
   estimatedHours: number;
   actualHours: number;
   completedAt?: string;
-  employeeId: TaskEmployee;
-  assignedById?: TaskEmployee;
+  employeeId?: TaskEmployee | null;
+  assignedById?: TaskEmployee | null;
   createdAt: string;
   updatedAt: string;
 }

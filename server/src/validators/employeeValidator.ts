@@ -36,12 +36,14 @@ export const createEmployeeSchema = z.object({
   phone: z
     .string()
     .max(20)
-    .optional(),
+    .optional()
+    .or(z.literal("")),
 
   dateOfBirth: z
-    .coerce
-    .date()
-    .optional(),
+    .preprocess(
+      (val) => (val === "" || val === null || val === undefined ? undefined : val),
+      z.coerce.date().optional()
+    ),
 
   gender: z
     .enum([
@@ -49,7 +51,8 @@ export const createEmployeeSchema = z.object({
       "FEMALE",
       "OTHER",
     ])
-    .optional(),
+    .optional()
+    .or(z.literal("")),
 
   departmentId: objectId.optional(),
 
@@ -101,12 +104,14 @@ export const updateEmployeeSchema =
     phone: z
       .string()
       .max(20)
-      .optional(),
+      .optional()
+      .or(z.literal("")),
 
     dateOfBirth: z
-      .coerce
-      .date()
-      .optional(),
+      .preprocess(
+        (val) => (val === "" || val === null || val === undefined ? undefined : val),
+        z.coerce.date().optional()
+      ),
 
     gender: z
       .enum([
@@ -114,7 +119,8 @@ export const updateEmployeeSchema =
         "FEMALE",
         "OTHER",
       ])
-      .optional(),
+      .optional()
+      .or(z.literal("")),
 
     departmentId: z
       .union([
@@ -133,12 +139,14 @@ export const updateEmployeeSchema =
     designation: z
       .string()
       .max(100)
-      .optional(),
+      .optional()
+      .or(z.literal("")),
 
     joiningDate: z
-      .coerce
-      .date()
-      .optional(),
+      .preprocess(
+        (val) => (val === "" || val === null || val === undefined ? undefined : val),
+        z.coerce.date().optional()
+      ),
 
     employmentType: z
       .enum([
@@ -152,7 +160,8 @@ export const updateEmployeeSchema =
     workLocation: z
       .string()
       .max(100)
-      .optional(),
+      .optional()
+      .or(z.literal("")),
 
     monthlySalary: z
       .coerce

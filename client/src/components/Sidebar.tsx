@@ -115,7 +115,7 @@ const Sidebar = () => {
             icon: LifeBuoy,
           },
           {
-            label: "Task Board",
+            label: "Taskboard",
             path: "/tasks/management",
             icon: ClipboardList,
           },

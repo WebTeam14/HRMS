@@ -257,6 +257,9 @@ const AppRoutes = () => {
 
           {/* Task Routes */}
           <Route path="/tasks/management" element={<TaskManagement />} />
+          <Route path="/tasks" element={<Navigate to="/tasks/management" replace />} />
+          <Route path="/taskboard" element={<Navigate to="/tasks/management" replace />} />
+          <Route path="/task-board" element={<Navigate to="/tasks/management" replace />} />
           <Route path="/my-tasks" element={<MyTasks />} />
 
           {/* Onboarding Routes */}

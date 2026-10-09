@@ -13,11 +13,7 @@ import {
   getDepartments,
   type Department,
 } from "../../services/departmentService";
-
-import {
-  getDesignations,
-  type Designation,
-} from "../../services/designationService";
+import { DesignationInput } from "../common/DesignationInput";
 
 interface EditEmployeeModalProps {
   employeeId: string | null;
@@ -35,8 +31,6 @@ export const EditEmployeeModal = ({
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [managers, setManagers] = useState<Employee[]>([]);
-  const [designations, setDesignations] = useState<Designation[]>([]);
-  const [loadingDesignations, setLoadingDesignations] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -110,19 +104,6 @@ export const EditEmployeeModal = ({
             ? String(data.monthlySalary)
             : "50000",
       });
-
-      if (rawDeptId) {
-        try {
-          const desigRes = await getDesignations({
-            departmentId: rawDeptId,
-            status: "ACTIVE",
-            limit: 100,
-          });
-          setDesignations(desigRes.data);
-        } catch (desigErr) {
-          console.error("Failed to load designations for department:", desigErr);
-        }
-      }
     } catch (err: any) {
       setError(
         err?.response?.data?.message || "Failed to load employee details."
@@ -132,35 +113,14 @@ export const EditEmployeeModal = ({
     }
   };
 
-  const handleDepartmentChange = async (
+  const handleDepartmentChange = (
     e: React.ChangeEvent<HTMLSelectElement>
   ) => {
     const selectedDeptId = e.target.value;
     setForm((prev) => ({
       ...prev,
       departmentId: selectedDeptId,
-      designation: "",
     }));
-
-    if (!selectedDeptId) {
-      setDesignations([]);
-      return;
-    }
-
-    try {
-      setLoadingDesignations(true);
-      const res = await getDesignations({
-        departmentId: selectedDeptId,
-        status: "ACTIVE",
-        limit: 100,
-      });
-      setDesignations(res.data);
-    } catch (err) {
-      console.error("Failed to load designations:", err);
-      setDesignations([]);
-    } finally {
-      setLoadingDesignations(false);
-    }
   };
 
   const handleChange = (
@@ -186,6 +146,14 @@ export const EditEmployeeModal = ({
         if (value !== undefined) {
           if (key === "monthlySalary") {
             payload[key] = Number(value) || 0;
+          } else if (key === "dateOfBirth" || key === "joiningDate") {
+            if (value && typeof value === "string" && value.trim()) {
+              payload[key] = value.trim();
+            }
+          } else if (key === "gender") {
+            if (value && typeof value === "string" && value.trim()) {
+              payload[key] = value.trim();
+            }
           } else {
             payload[key] = value;
           }
@@ -196,8 +164,15 @@ export const EditEmployeeModal = ({
       if (onSuccess) onSuccess();
       onClose();
     } catch (err: any) {
+      const details = err?.response?.data?.details;
+      const detailMsg =
+        Array.isArray(details) && details.length > 0
+          ? details.map((d: any) => `${d.field}: ${d.message}`).join(" | ")
+          : "";
       setError(
-        err?.response?.data?.message || "Failed to update employee details."
+        detailMsg ||
+          err?.response?.data?.message ||
+          "Failed to update employee details."
       );
     } finally {
       setSaving(false);
@@ -432,34 +407,13 @@ export const EditEmployeeModal = ({
 
                 <div className="form-field">
                   <label>Designation</label>
-                  {!form.departmentId ? (
-                    <select disabled>
-                      <option value="">Select Department First</option>
-                    </select>
-                  ) : loadingDesignations ? (
-                    <select disabled>
-                      <option value="">Loading Designations...</option>
-                    </select>
-                  ) : (
-                    <select
-                      name="designation"
-                      value={form.designation}
-                      onChange={handleChange}
-                    >
-                      <option value="">Select Designation</option>
-                      {form.designation &&
-                        !designations.some((d) => d.name === form.designation) && (
-                          <option value={form.designation}>
-                            {form.designation} (Current)
-                          </option>
-                        )}
-                      {designations.map((desig) => (
-                        <option key={desig._id} value={desig.name}>
-                          {desig.name}
-                        </option>
-                      ))}
-                    </select>
-                  )}
+                  <DesignationInput
+                    value={form.designation}
+                    onChange={(val) =>
+                      setForm((prev) => ({ ...prev, designation: val }))
+                    }
+                    departmentId={form.departmentId}
+                  />
                 </div>
 
                 <div className="form-field">

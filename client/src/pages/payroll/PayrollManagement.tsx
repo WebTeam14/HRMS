@@ -1089,16 +1089,18 @@ const PayrollManagement = () => {
             >
               {/* Header Letterhead */}
               <div style={{ textAlign: "center", borderBottom: "2px solid #0f172a", paddingBottom: "16px", marginBottom: "16px" }}>
-                <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "8px" }}>
-                  <div style={{ width: "28px", height: "28px", borderRadius: "6px", background: "#0f172a", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800 }}>
-                    T
-                  </div>
+                <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "12px", marginBottom: "4px" }}>
+                  <img
+                    src="/logo.png"
+                    alt="Company Logo"
+                    style={{ height: "46px", objectFit: "contain" }}
+                  />
                   <h1 style={{ margin: 0, fontSize: "20px", fontWeight: 800, color: "#0f172a", letterSpacing: "0.02em" }}>
                     TECHNORIYA eTECHNOLOGIES PRIVATE LIMITED
                   </h1>
                 </div>
                 <p style={{ margin: "4px 0 2px", fontSize: "11px", color: "#475569" }}>
-                  219, NBC Complex, Opp. ICICI Bank, Sector 11, CBD Belapur, Navi Mumbai, Maharashtra - 400614
+                  B - 118, Balaji Bhawan, Sector 11, CBD Belapur, 400614.
                 </p>
                 <p style={{ margin: 0, fontSize: "11px", color: "#475569" }}>
                   Email: hr@technoriya.in • Website: www.technoriya.in
